@@ -1,0 +1,94 @@
+gint
+Copyright 2025 ink-yht-code
+
+This product includes software developed as a derivative work based on ginx
+(https://github.com/ecodeclub/ginx), which is licensed under the Apache License 2.0.
+
+================================================================================
+
+NOTICE for ginx (Original Work):
+================================================================================
+
+This project (gint) is a derivative work based on ginx, with the following modifications:
+
+1. Simplified architecture - Removed enterprise-level features for lightweight use
+2. Redesigned session management - Implemented dual-token mechanism (Access Token + Refresh Token)
+3. Enhanced validation system - Adopted design patterns (Strategy + Builder + Composite)
+4. Added new features:
+   - Unified response code system (0=success, 1=warning, 2=error)
+   - Memory-based session provider for development/testing
+   - Active connection limit middleware
+   - Enhanced context with convenient parameter access
+   - Support for regexp2 with advanced regex features
+
+5. Documentation - Completely rewritten in Chinese for better accessibility
+
+The original ginx project is Copyright by ecodeclub and contributors.
+Original source: https://github.com/ecodeclub/ginx
+Original license: Apache License 2.0
+
+================================================================================
+
+Attribution and Acknowledgments:
+================================================================================
+
+We acknowledge and thank the original authors and contributors of ginx for their
+excellent work, which served as the foundation for this project.
+
+Key components derived from ginx:
+- Core handler wrapper pattern (W/B/S/BS)
+- Session management architecture
+- Middleware framework
+- Context enhancement concepts
+
+All modifications and new features in gint are also licensed under Apache License 2.0.
+
+================================================================================
+
+Third-Party Dependencies:
+================================================================================
+
+This project uses the following third-party libraries:
+
+1. github.com/gin-gonic/gin
+   License: MIT License
+   Copyright (c) 2014 Manuel Martínez-Almeida
+
+2. github.com/golang-jwt/jwt/v5
+   License: MIT License
+   Copyright (c) 2012 Dave Grijalva
+
+3. github.com/redis/go-redis/v9
+   License: BSD 2-Clause License
+   Copyright (c) 2013 The github.com/redis/go-redis Authors
+
+4. github.com/google/uuid
+   License: BSD 3-Clause License
+   Copyright (c) 2009,2014 Google Inc. All rights reserved.
+
+5. github.com/dlclark/regexp2
+   License: MIT License
+   Copyright (c) 2012 Doug Clark
+
+6. go.uber.org/atomic
+   License: MIT License
+   Copyright (c) 2016 Uber Technologies, Inc.
+
+For complete license texts of dependencies, please refer to their respective
+repositories and LICENSE files.
+
+================================================================================
+
+Legal Compliance:
+================================================================================
+
+This project complies with Apache License 2.0 requirements:
+
+✓ Retained all copyright, patent, trademark, and attribution notices
+✓ Included this NOTICE file with attribution information
+✓ Marked all modified files with change notices (see file headers)
+✓ Distributed under the same Apache License 2.0
+✓ Provided clear documentation of changes and derivation
+
+
+================================================================================
