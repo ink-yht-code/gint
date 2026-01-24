@@ -21,6 +21,7 @@ package header
 import (
 	"github.com/ink-yht-code/gint/gctx"
 	"github.com/ink-yht-code/gint/session"
+	"strings"
 )
 
 var _ session.TokenCarrier = (*Carrier)(nil)
@@ -52,7 +53,21 @@ func (c *Carrier) Inject(ctx *gctx.Context, token string) {
 
 // Extract 从请求 Header 中提取 Token
 func (c *Carrier) Extract(ctx *gctx.Context) string {
-	return ctx.GetHeader(c.headerName)
+	val := strings.TrimSpace(ctx.GetHeader(c.headerName))
+	if val == "" {
+		return ""
+	}
+
+	// 支持标准格式: Authorization: Bearer <token>
+	// 同时兼容旧格式：直接传 token
+	if len(val) >= 7 && strings.EqualFold(val[:6], "bearer") {
+		rest := strings.TrimSpace(val[6:])
+		if rest != "" {
+			return rest
+		}
+	}
+
+	return val
 }
 
 // Clear 清除 Token（设置为空）
