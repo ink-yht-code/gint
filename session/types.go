@@ -20,6 +20,7 @@ package session
 
 import (
 	"context"
+	"errors"
 	"sync/atomic"
 
 	"github.com/ink-yht-code/gint/gctx"
@@ -29,6 +30,13 @@ import (
 const (
 	// CtxSessionKey 在 Context 中存储 Session 的 key
 	CtxSessionKey = "gint:session"
+	// CtxProviderKey 在 Context 中存储 Provider 的 key
+	CtxProviderKey = "gint:session_provider"
+)
+
+var (
+	// ErrProviderNotInitialized 表示 Session Provider 未初始化
+	ErrProviderNotInitialized = errors.New("session provider 未初始化")
 )
 
 // Session 会话接口
@@ -96,20 +104,45 @@ func SetDefaultProvider(provider Provider) {
 }
 
 // getDefaultProvider 获取默认 Provider
-func getDefaultProvider() Provider {
+func getDefaultProvider() (Provider, error) {
 	p := defaultProvider.Load()
 	if p == nil {
-		panic("session provider 未初始化，请先调用 SetDefaultProvider")
+		return nil, ErrProviderNotInitialized
 	}
-	return p.(Provider)
+	return p.(Provider), nil
+}
+
+// SetProvider 将 Provider 注入到当前请求上下文中
+// 用于避免全局单例带来的测试污染或多 Engine 隔离问题
+func SetProvider(ctx *gctx.Context, provider Provider) {
+	ctx.Set(CtxProviderKey, provider)
+}
+
+func getProvider(ctx *gctx.Context) (Provider, error) {
+	if ctx != nil {
+		if val, ok := ctx.Get(CtxProviderKey); ok {
+			if p, ok2 := val.(Provider); ok2 {
+				return p, nil
+			}
+		}
+	}
+	return getDefaultProvider()
 }
 
 // Get 使用默认 Provider 获取 Session
 func Get(ctx *gctx.Context) (Session, error) {
-	return getDefaultProvider().Get(ctx)
+	p, err := getProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return p.Get(ctx)
 }
 
 // NewSession 使用默认 Provider 创建 Session
 func NewSession(ctx *gctx.Context, userId string, jwtData map[string]string, sessData map[string]any) (Session, error) {
-	return getDefaultProvider().NewSession(ctx, userId, jwtData, sessData)
+	p, err := getProvider(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return p.NewSession(ctx, userId, jwtData, sessData)
 }

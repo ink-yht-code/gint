@@ -31,7 +31,6 @@ type Manager struct {
 	opts         Options
 	adapter      persist.Adapter
 	mu           sync.RWMutex
-	lastLoadTime int64
 	cacheEnabled bool
 }
 
@@ -108,12 +107,9 @@ func (m *Manager) LoadPolicies(ctx context.Context) error {
 			parts := parsePolicyString(policy)
 			if len(parts) >= 4 && parts[0] == "p" {
 				sub, obj, act := parts[1], parts[2], parts[3]
-				added, err := m.enforcer.AddPolicy(sub, obj, act)
+				_, err := m.enforcer.AddPolicy(sub, obj, act)
 				if err != nil {
 					return fmt.Errorf("添加策略失败: %w", err)
-				}
-				if !added {
-					// 策略已存在，忽略
 				}
 			}
 		}
@@ -126,12 +122,9 @@ func (m *Manager) LoadPolicies(ctx context.Context) error {
 			parts := parsePolicyString(rolePolicy)
 			if len(parts) >= 3 && parts[0] == "g" {
 				user, role := parts[1], parts[2]
-				added, err := m.enforcer.AddGroupingPolicy(user, role)
+				_, err := m.enforcer.AddGroupingPolicy(user, role)
 				if err != nil {
 					return fmt.Errorf("添加角色策略失败: %w", err)
-				}
-				if !added {
-					// 策略已存在，忽略
 				}
 			}
 		}

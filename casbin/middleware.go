@@ -19,6 +19,7 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/ink-yht-code/gint"
 	"github.com/ink-yht-code/gint/gctx"
 	"github.com/ink-yht-code/gint/session"
 )
@@ -51,10 +52,7 @@ func (b *Builder) Build() gin.HandlerFunc {
 		// 如果启用了自动加载，每次请求都重新加载策略（不推荐）
 		if b.opts.AutoLoad {
 			if err := b.manager.LoadPolicies(ctx); err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "加载策略失败",
-				})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gint.InternalError())
 				return
 			}
 		}
@@ -80,10 +78,7 @@ func (b *Builder) Build() gin.HandlerFunc {
 			// 从 UserRoleProvider 获取角色
 			roles, err = b.opts.UserRoleProvider.GetUserRoles(ctx, userId)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "获取用户角色失败",
-				})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gint.InternalError())
 				return
 			}
 		} else {
@@ -107,10 +102,7 @@ func (b *Builder) Build() gin.HandlerFunc {
 		for _, role := range roles {
 			ok, err := b.manager.Enforce(role, resource, action)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "权限检查失败",
-				})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gint.InternalError())
 				return
 			}
 			if ok {
@@ -123,20 +115,14 @@ func (b *Builder) Build() gin.HandlerFunc {
 		if !allowed {
 			ok, err := b.manager.Enforce(userId, resource, action)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-					"code": 500,
-					"msg":  "权限检查失败",
-				})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gint.InternalError())
 				return
 			}
 			allowed = ok
 		}
 
 		if !allowed {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code": 403,
-				"msg":  "没有权限访问该资源",
-			})
+			c.AbortWithStatusJSON(http.StatusForbidden, gint.Forbidden())
 			return
 		}
 
@@ -192,18 +178,12 @@ func RequirePermission(manager *Manager, resource, action string) gin.HandlerFun
 		// 检查权限
 		allowed, err := manager.Enforce(userId, resource, action)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
-				"code": 500,
-				"msg":  "权限检查失败",
-			})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gint.InternalError())
 			return
 		}
 
 		if !allowed {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"code": 403,
-				"msg":  "没有权限访问该资源",
-			})
+			c.AbortWithStatusJSON(http.StatusForbidden, gint.Forbidden())
 			return
 		}
 

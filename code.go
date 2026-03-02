@@ -26,14 +26,34 @@ const (
 	// CodeError 错误
 	// 请求处理失败
 	CodeError = 2
+
+	// CodeInvalidParam 参数错误
+	// 用于请求参数不符合接口契约（通常对应 HTTP 400）
+	CodeInvalidParam = 10000
+
+	// CodeInternalError 系统错误
+	// 用于系统异常（通常对应 HTTP 500），不应将内部错误信息直接暴露给客户端
+	CodeInternalError = 20000
+
+	// CodeUnauthorized 未授权
+	// 用于未登录或 Token 无效（通常对应 HTTP 401）
+	CodeUnauthorized = 20001
+
+	// CodeForbidden 禁止访问
+	// 用于已登录但无权限（通常对应 HTTP 403）
+	CodeForbidden = 20003
 )
 
 // CodeMessage 响应码对应的默认消息
 // 注意：此 map 为只读，不要在运行时修改
 var CodeMessage = map[int]string{
-	CodeSuccess: "成功",
-	CodeWarning: "警告",
-	CodeError:   "错误",
+	CodeSuccess:       "成功",
+	CodeWarning:       "警告",
+	CodeError:         "错误",
+	CodeInvalidParam:  "参数错误",
+	CodeInternalError: "系统繁忙",
+	CodeUnauthorized:  "未授权",
+	CodeForbidden:     "没有权限",
 }
 
 // GetCodeMessage 获取响应码对应的默认消息
@@ -101,4 +121,28 @@ func ErrorWithCode(code int, msg string) Result {
 		Msg:  msg,
 		Data: nil,
 	}
+}
+
+// InvalidParam 创建参数错误响应
+func InvalidParam(msg string) Result {
+	if msg == "" {
+		msg = GetCodeMessage(CodeInvalidParam)
+	}
+	return Result{Code: CodeInvalidParam, Msg: msg, Data: nil}
+}
+
+// InternalError 创建系统错误响应
+// 注意：该响应用于对外返回统一文案，内部错误细节应记录在日志中
+func InternalError() Result {
+	return Result{Code: CodeInternalError, Msg: GetCodeMessage(CodeInternalError), Data: nil}
+}
+
+// Unauthorized 创建未授权响应
+func Unauthorized() Result {
+	return Result{Code: CodeUnauthorized, Msg: GetCodeMessage(CodeUnauthorized), Data: nil}
+}
+
+// Forbidden 创建禁止访问响应
+func Forbidden() Result {
+	return Result{Code: CodeForbidden, Msg: GetCodeMessage(CodeForbidden), Data: nil}
 }

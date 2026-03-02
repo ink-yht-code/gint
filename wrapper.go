@@ -60,11 +60,15 @@ func W(fn func(ctx *gctx.Context) (Result, error)) gin.HandlerFunc {
 			slog.Error("执行业务逻辑失败",
 				slog.String("path", c.Request.URL.Path),
 				slog.Any("err", err))
-			c.JSON(http.StatusOK, Result{
-				Code: res.Code,
-				Msg:  err.Error(),
-				Data: nil,
-			})
+			if res.Code == 0 {
+				res = InternalError()
+			} else {
+				res.Data = nil
+				if res.Msg == "" {
+					res.Msg = GetCodeMessage(res.Code)
+				}
+			}
+			c.JSON(http.StatusOK, res)
 			return
 		}
 
@@ -97,11 +101,7 @@ func B[Req any](fn func(ctx *gctx.Context, req Req) (Result, error)) gin.Handler
 			slog.Debug("绑定参数失败",
 				slog.String("path", c.Request.URL.Path),
 				slog.Any("err", err))
-			c.JSON(http.StatusBadRequest, Result{
-				Code: 400,
-				Msg:  "参数错误: " + err.Error(),
-				Data: nil,
-			})
+			c.JSON(http.StatusBadRequest, InvalidParam("参数错误"))
 			return
 		}
 
@@ -125,11 +125,15 @@ func B[Req any](fn func(ctx *gctx.Context, req Req) (Result, error)) gin.Handler
 			slog.Error("执行业务逻辑失败",
 				slog.String("path", c.Request.URL.Path),
 				slog.Any("err", err))
-			c.JSON(http.StatusOK, Result{
-				Code: res.Code,
-				Msg:  err.Error(),
-				Data: nil,
-			})
+			if res.Code == 0 {
+				res = InternalError()
+			} else {
+				res.Data = nil
+				if res.Msg == "" {
+					res.Msg = GetCodeMessage(res.Code)
+				}
+			}
+			c.JSON(http.StatusOK, res)
 			return
 		}
 
@@ -182,11 +186,15 @@ func S(fn func(ctx *gctx.Context, sess session.Session) (Result, error)) gin.Han
 				slog.String("path", c.Request.URL.Path),
 				slog.String("user_id", sess.Claims().UserId),
 				slog.Any("err", err))
-			c.JSON(http.StatusOK, Result{
-				Code: res.Code,
-				Msg:  err.Error(),
-				Data: nil,
-			})
+			if res.Code == 0 {
+				res = InternalError()
+			} else {
+				res.Data = nil
+				if res.Msg == "" {
+					res.Msg = GetCodeMessage(res.Code)
+				}
+			}
+			c.JSON(http.StatusOK, res)
 			return
 		}
 
@@ -231,11 +239,7 @@ func BS[Req any](fn func(ctx *gctx.Context, req Req, sess session.Session) (Resu
 				slog.String("path", c.Request.URL.Path),
 				slog.String("user_id", sess.Claims().UserId),
 				slog.Any("err", err))
-			c.JSON(http.StatusBadRequest, Result{
-				Code: 400,
-				Msg:  "参数错误: " + err.Error(),
-				Data: nil,
-			})
+			c.JSON(http.StatusBadRequest, InvalidParam("参数错误"))
 			return
 		}
 
@@ -260,11 +264,15 @@ func BS[Req any](fn func(ctx *gctx.Context, req Req, sess session.Session) (Resu
 				slog.String("path", c.Request.URL.Path),
 				slog.String("user_id", sess.Claims().UserId),
 				slog.Any("err", err))
-			c.JSON(http.StatusOK, Result{
-				Code: res.Code,
-				Msg:  err.Error(),
-				Data: nil,
-			})
+			if res.Code == 0 {
+				res = InternalError()
+			} else {
+				res.Data = nil
+				if res.Msg == "" {
+					res.Msg = GetCodeMessage(res.Code)
+				}
+			}
+			c.JSON(http.StatusOK, res)
 			return
 		}
 

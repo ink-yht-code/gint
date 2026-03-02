@@ -85,12 +85,18 @@ func New(config Config) gin.HandlerFunc {
 
 		// 设置 Access-Control-Allow-Origin
 		if allowAllOrigins {
-			c.Header("Access-Control-Allow-Origin", "*")
+			if config.AllowCredentials && origin != "" {
+				c.Header("Access-Control-Allow-Origin", origin)
+				c.Header("Vary", "Origin")
+			} else {
+				c.Header("Access-Control-Allow-Origin", "*")
+			}
 		} else if origin != "" {
 			// 检查 origin 是否在允许列表中
 			for _, allowedOrigin := range config.AllowOrigins {
 				if origin == allowedOrigin {
 					c.Header("Access-Control-Allow-Origin", origin)
+					c.Header("Vary", "Origin")
 					break
 				}
 			}
