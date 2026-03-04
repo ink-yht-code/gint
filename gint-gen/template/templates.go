@@ -25,12 +25,14 @@ type HelloResp {
     Message string ` + "`" + `json:"message"` + "`" + `
 }
 
-@server(
-    prefix: /api/v1
-)
+server {
+    prefix "/api/v1"
+}
+
 service {{.Name}} {
-    @handler Hello
-    GET /hello (HelloReq) returns (HelloResp)
+    public {
+        GET "/hello" Hello(HelloReq) -> HelloResp
+    }
 }
 `
 
