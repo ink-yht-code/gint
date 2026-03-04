@@ -117,12 +117,12 @@ func generateHTTPFiles(name string) error {
 		return err
 	}
 
-	// handler_impl.go (user-editable, create once)
-	handlerImplContent, err := generator.ExecuteTemplate(template.HTTPHandlerImplTmpl, data)
+	// <service>_handlers.go (user-editable, create once)
+	handlersContent, err := generator.ExecuteTemplate(template.HTTPHandlerImplTmpl, data)
 	if err != nil {
 		return err
 	}
-	return generator.GenerateFile(filepath.Join(name, "internal", "web", "handler_impl.go"), handlerImplContent)
+	return generator.GenerateFile(filepath.Join(name, "internal", "web", name+"_handlers.go"), handlersContent)
 }
 
 func generateServerFile(name string) error {

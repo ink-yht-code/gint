@@ -407,15 +407,14 @@ import (
 //
 // 说明：
 // - 本文件可被重复生成覆盖
-// - 业务逻辑请在 handler_impl.go 中实现
+// - 业务逻辑请在 <service>_handlers.go 中实现
 type Handler struct {
-	svc  *server.{{.NameUpper}}Service
-	impl *HandlerImpl
+	svc *server.{{.NameUpper}}Service
 }
 
 // NewHandler 创建 Handler
 func NewHandler(svc *server.{{.NameUpper}}Service) *Handler {
-	return &Handler{svc: svc, impl: &HandlerImpl{svc: svc}}
+	return &Handler{svc: svc}
 }
 
 // PrivateRoutes 注册需要认证的路由
@@ -425,7 +424,7 @@ func (h *Handler) PrivateRoutes(server *gin.Engine) {
 
 // PublicRoutes 注册公开的路由
 func (h *Handler) PublicRoutes(server *gin.Engine) {
-	server.GET("/api/v1/hello", gint.B(h.impl.Hello))
+	server.GET("/api/v1/hello", gint.B(h.Hello))
 }
 
 // Health 健康检查
@@ -440,26 +439,12 @@ var HTTPHandlerImplTmpl = `package web
 import (
 	"github.com/ink-yht-code/gint"
 	"github.com/ink-yht-code/gint/gctx"
-	"{{.Name}}/internal/server"
 	"{{.Name}}/internal/types"
 )
 
-// HandlerImpl 业务逻辑实现
-//
-// 说明：
-// - 本文件不会被生成器覆盖
-// - 你应该在这里编写业务逻辑
-type HandlerImpl struct {
-	svc *server.{{.NameUpper}}Service
-}
-
 // Hello 示例 handler
-func (h *HandlerImpl) Hello(ctx *gctx.Context, req *types.HelloReq) (gint.Result, error) {
-	msg, err := h.svc.Hello(ctx.Request.Context(), req.Name)
-	if err != nil {
-		return gint.InternalError(), err
-	}
-	return gint.Result{Code: 0, Data: &types.HelloResp{Message: msg}}, nil
+func (h *Handler) Hello(ctx *gctx.Context, req *types.HelloReq) (gint.Result, error) {
+	return gint.Result{Code: 0, Data: &types.HelloResp{Message: "ok"}}, nil
 }
 `
 
