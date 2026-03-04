@@ -20,7 +20,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ink-yht-code/gint-gen/registry"
+	"github.com/ink-yht-code/gint/gint-gen/registry"
 	"github.com/spf13/cobra"
 )
 

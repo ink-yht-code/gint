@@ -21,6 +21,10 @@ gint/
 ### 安装代码生成器
 
 ```bash
+# 从 GitHub 安装
+go install github.com/ink-yht-code/gint-gen@latest
+
+# 或本地安装
 cd gint-gen && go install .
 ```
 

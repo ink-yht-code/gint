@@ -18,8 +18,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ink-yht-code/gint-gen/generator"
-	"github.com/ink-yht-code/gint-gen/template"
+	"github.com/ink-yht-code/gint/gint-gen/generator"
+	"github.com/ink-yht-code/gint/gint-gen/template"
 )
 
 func generateGintFile(name string) error {

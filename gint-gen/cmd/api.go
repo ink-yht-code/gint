@@ -20,8 +20,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ink-yht-code/gint-gen/generator"
-	"github.com/ink-yht-code/gint-gen/parser"
+	"github.com/ink-yht-code/gint/gint-gen/generator"
+	"github.com/ink-yht-code/gint/gint-gen/parser"
 	"github.com/spf13/cobra"
 )
 

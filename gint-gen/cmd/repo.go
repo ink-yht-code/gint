@@ -22,7 +22,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/ink-yht-code/gint-gen/generator"
+	"github.com/ink-yht-code/gint/gint-gen/generator"
 	"github.com/spf13/cobra"
 )
 

@@ -1,4 +1,4 @@
-module github.com/ink-yht-code/gint-gen
+module github.com/ink-yht-code/gint/gint-gen
 
 go 1.25
 

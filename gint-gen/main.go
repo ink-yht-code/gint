@@ -14,7 +14,7 @@
 
 package main
 
-import "github.com/ink-yht-code/gint-gen/cmd"
+import "github.com/ink-yht-code/gint/gint-gen/cmd"
 
 func main() {
 	cmd.Execute()
