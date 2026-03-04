@@ -43,6 +43,7 @@ type Route struct {
 	Handler  string
 	Request  string
 	Response string
+	Private  bool
 }
 
 // Service 服务定义
@@ -89,6 +90,10 @@ func (p *Parser) Parse(content string) (*API, error) {
 	var inType bool
 	var inService bool
 	var inServerBlock bool
+	var nextRoutePrivate bool
+	var inServerBlockV2 bool
+	var inPublicBlock bool
+	var inPrivateBlock bool
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -104,6 +109,32 @@ func (p *Parser) Parse(content string) (*API, error) {
 			matches := re.FindStringSubmatch(line)
 			if len(matches) > 1 {
 				api.Syntax = matches[1]
+			}
+			continue
+		}
+
+		// server v2 block start: server {
+		if strings.HasPrefix(line, "server") && strings.Contains(line, "{") {
+			inServerBlockV2 = true
+			if currentService == nil {
+				currentService = &Service{}
+			}
+			continue
+		}
+
+		// server v2 block end
+		if inServerBlockV2 && line == "}" {
+			inServerBlockV2 = false
+			continue
+		}
+
+		// server v2 block content
+		if inServerBlockV2 {
+			// prefix "/api/v1"
+			re := regexp.MustCompile(`^prefix\s+"([^"]+)"$`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				currentService.Prefix = matches[1]
 			}
 			continue
 		}
@@ -161,6 +192,9 @@ func (p *Parser) Parse(content string) (*API, error) {
 		// service 定义开始
 		if strings.HasPrefix(line, "service ") {
 			inService = true
+			nextRoutePrivate = false
+			inPublicBlock = false
+			inPrivateBlock = false
 			name := strings.TrimPrefix(line, "service ")
 			name = strings.TrimSuffix(name, "{")
 			name = strings.TrimSpace(name)
@@ -175,6 +209,9 @@ func (p *Parser) Parse(content string) (*API, error) {
 		// service 结束
 		if inService && line == "}" {
 			inService = false
+			nextRoutePrivate = false
+			inPublicBlock = false
+			inPrivateBlock = false
 			if currentService != nil {
 				api.Services = append(api.Services, *currentService)
 				currentService = nil
@@ -182,11 +219,48 @@ func (p *Parser) Parse(content string) (*API, error) {
 			continue
 		}
 
+		// v2 public/private blocks
+		if inService {
+			if strings.HasPrefix(line, "public") && strings.Contains(line, "{") {
+				inPublicBlock = true
+				inPrivateBlock = false
+				nextRoutePrivate = false
+				continue
+			}
+			if strings.HasPrefix(line, "private") && strings.Contains(line, "{") {
+				inPrivateBlock = true
+				inPublicBlock = false
+				nextRoutePrivate = true
+				continue
+			}
+			if (inPublicBlock || inPrivateBlock) && line == "}" {
+				inPublicBlock = false
+				inPrivateBlock = false
+				nextRoutePrivate = false
+				continue
+			}
+		}
+
+		// 路由选项：@private
+		if inService && strings.HasPrefix(line, "@private") {
+			nextRoutePrivate = true
+			continue
+		}
+
 		// 路由定义
 		if inService && currentService != nil {
 			route := p.parseRoute(line)
 			if route.Method != "" {
+				// v2 public/private blocks take precedence
+				if inPrivateBlock {
+					route.Private = true
+				} else if inPublicBlock {
+					route.Private = false
+				} else {
+					route.Private = nextRoutePrivate
+				}
 				currentService.Routes = append(currentService.Routes, route)
+				nextRoutePrivate = false
 			}
 		}
 	}

@@ -22,7 +22,7 @@ gint/
 
 ```bash
 # 从 GitHub 安装
-go install github.com/ink-yht-code/gint-gen@latest
+go install github.com/ink-yht-code/gint/gint-gen@latest
 
 # 或本地安装
 cd gint-gen && go install .

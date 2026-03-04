@@ -99,21 +99,30 @@ func generateHTTPFiles(name string) error {
 		NameUpper: strings.Title(name),
 	}
 
-	// types.go
+	// types_gen.go (generated)
 	typesContent, err := generator.ExecuteTemplate(template.TypesTmpl, data)
 	if err != nil {
 		return err
 	}
-	if err := generator.GenerateFile(filepath.Join(name, "internal", "types", "types.go"), typesContent); err != nil {
+	if err := generator.GenerateFile(filepath.Join(name, "internal", "types", "types_gen.go"), typesContent); err != nil {
 		return err
 	}
 
-	// handler.go
-	handlerContent, err := generator.ExecuteTemplate(template.HTTPTmpl, data)
+	// handler_gen.go (generated, overwriteable)
+	handlerGenContent, err := generator.ExecuteTemplate(template.HTTPHandlerGenTmpl, data)
 	if err != nil {
 		return err
 	}
-	return generator.GenerateFile(filepath.Join(name, "internal", "web", "handler.go"), handlerContent)
+	if err := generator.GenerateFile(filepath.Join(name, "internal", "web", "handler_gen.go"), handlerGenContent); err != nil {
+		return err
+	}
+
+	// handler_impl.go (user-editable, create once)
+	handlerImplContent, err := generator.ExecuteTemplate(template.HTTPHandlerImplTmpl, data)
+	if err != nil {
+		return err
+	}
+	return generator.GenerateFile(filepath.Join(name, "internal", "web", "handler_impl.go"), handlerImplContent)
 }
 
 func generateServerFile(name string) error {
