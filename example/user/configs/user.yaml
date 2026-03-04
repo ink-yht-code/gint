@@ -1,0 +1,32 @@
+service:
+  id: 101
+  name: user
+
+http:
+  enabled: true
+  addr: ":8080"
+
+grpc:
+  enabled: false
+  addr: ":9090"
+
+db:
+  dsn: "user:pass@tcp(127.0.0.1:3306)/user?charset=utf8mb4&parseTime=True&loc=Local"
+  max_open: 100
+  max_idle: 10
+  log_level: "info"
+
+redis:
+  addr: "127.0.0.1:6379"
+  password: ""
+  db: 0
+
+log:
+  level: "info"
+  encoding: "json"
+  output: "stdout"
+
+outbox:
+  enabled: true
+  batch_size: 100
+  poll_interval: "5s"

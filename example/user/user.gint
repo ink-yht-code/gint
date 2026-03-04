@@ -1,0 +1,45 @@
+syntax = "v1"
+
+type CreateUserReq {
+    Name  string `json:"name" validate:"required"`
+    Email string `json:"email" validate:"required,email"`
+}
+
+type CreateUserResp {
+    Id    int64  `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
+
+type GetUserResp {
+    Id    int64  `json:"id"`
+    Name  string `json:"name"`
+    Email string `json:"email"`
+}
+
+type ListUsersReq {
+    Page int `json:"page"`
+    Size int `json:"size"`
+}
+
+type ListUsersResp {
+    Total int          `json:"total"`
+    Items []GetUserResp `json:"items"`
+}
+
+@server(
+    prefix: /api/v1
+)
+service user {
+    @handler CreateUser
+    POST /users (CreateUserReq) returns (CreateUserResp)
+
+    @handler GetUser
+    GET /users/:id returns (GetUserResp)
+
+    @handler ListUsers
+    GET /users (ListUsersReq) returns (ListUsersResp)
+
+    @handler DeleteUser
+    DELETE /users/:id
+}

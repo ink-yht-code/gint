@@ -1,0 +1,302 @@
+// Copyright 2025 ink-yht-code
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package parser
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"regexp"
+	"strings"
+)
+
+// TypeDef 类型定义
+type TypeDef struct {
+	Name   string
+	Fields []Field
+}
+
+// Field 字段
+type Field struct {
+	Name     string
+	Type     string
+	Tag      string
+	Validate string
+}
+
+// Route 路由
+type Route struct {
+	Method   string
+	Path     string
+	Handler  string
+	Request  string
+	Response string
+}
+
+// Service 服务定义
+type Service struct {
+	Name   string
+	Prefix string
+	Routes []Route
+}
+
+// API API 定义
+type API struct {
+	Syntax   string
+	Types    []TypeDef
+	Services []Service
+}
+
+// Parser .gint 文件解析器
+type Parser struct{}
+
+// NewParser 创建解析器
+func NewParser() *Parser {
+	return &Parser{}
+}
+
+// ParseFile 解析文件
+func (p *Parser) ParseFile(path string) (*API, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	return p.Parse(string(data))
+}
+
+// Parse 解析内容
+func (p *Parser) Parse(content string) (*API, error) {
+	api := &API{
+		Types:    make([]TypeDef, 0),
+		Services: make([]Service, 0),
+	}
+
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	var currentType *TypeDef
+	var currentService *Service
+	var inType bool
+	var inService bool
+	var inServerBlock bool
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// 跳过空行和注释
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+
+		// syntax
+		if strings.HasPrefix(line, "syntax") {
+			re := regexp.MustCompile(`syntax\s*=\s*"([^"]+)"`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				api.Syntax = matches[1]
+			}
+			continue
+		}
+
+		// type 定义开始
+		if strings.HasPrefix(line, "type ") {
+			inType = true
+			name := strings.TrimPrefix(line, "type ")
+			name = strings.TrimSuffix(name, "{")
+			name = strings.TrimSpace(name)
+			currentType = &TypeDef{Name: name, Fields: make([]Field, 0)}
+			continue
+		}
+
+		// type 结束
+		if inType && line == "}" {
+			inType = false
+			if currentType != nil {
+				api.Types = append(api.Types, *currentType)
+				currentType = nil
+			}
+			continue
+		}
+
+		// type 字段
+		if inType && currentType != nil {
+			field := p.parseField(line)
+			if field.Name != "" {
+				currentType.Fields = append(currentType.Fields, field)
+			}
+			continue
+		}
+
+		// @server 块开始
+		if strings.HasPrefix(line, "@server(") {
+			inServerBlock = true
+			if currentService == nil {
+				currentService = &Service{}
+			}
+			// 解析 prefix
+			re := regexp.MustCompile(`prefix:\s*([^\s\)]+)`)
+			matches := re.FindStringSubmatch(line)
+			if len(matches) > 1 {
+				currentService.Prefix = matches[1]
+			}
+			continue
+		}
+
+		// @server 块结束
+		if inServerBlock && line == ")" {
+			inServerBlock = false
+			continue
+		}
+
+		// service 定义开始
+		if strings.HasPrefix(line, "service ") {
+			inService = true
+			name := strings.TrimPrefix(line, "service ")
+			name = strings.TrimSuffix(name, "{")
+			name = strings.TrimSpace(name)
+			if currentService == nil {
+				currentService = &Service{Name: name}
+			} else {
+				currentService.Name = name
+			}
+			continue
+		}
+
+		// service 结束
+		if inService && line == "}" {
+			inService = false
+			if currentService != nil {
+				api.Services = append(api.Services, *currentService)
+				currentService = nil
+			}
+			continue
+		}
+
+		// 路由定义
+		if inService && currentService != nil {
+			route := p.parseRoute(line)
+			if route.Method != "" {
+				currentService.Routes = append(currentService.Routes, route)
+			}
+		}
+	}
+
+	return api, nil
+}
+
+// parseField 解析字段
+func (p *Parser) parseField(line string) Field {
+	// 格式: Name string `json:"name" validate:"required"`
+	// 使用 raw string 避免转义问题
+	re := regexp.MustCompile(`(\w+)\s+(\w+)(?:\s+\x60([^\x60]*)\x60)?`)
+	matches := re.FindStringSubmatch(line)
+	if len(matches) >= 3 {
+		field := Field{
+			Name: matches[1],
+			Type: matches[2],
+		}
+		if len(matches) > 3 {
+			field.Tag = matches[3]
+			// 提取 validate
+			validateRe := regexp.MustCompile(`validate:"([^"]+)"`)
+			validateMatches := validateRe.FindStringSubmatch(matches[3])
+			if len(validateMatches) > 1 {
+				field.Validate = validateMatches[1]
+			}
+		}
+		return field
+	}
+	return Field{}
+}
+
+// parseRoute 解析路由
+func (p *Parser) parseRoute(line string) Route {
+	// 格式: @handler CreateUser
+	//       POST /users (CreateUserReq) returns (CreateUserResp)
+	route := Route{}
+
+	// @handler
+	if strings.HasPrefix(line, "@handler ") {
+		route.Handler = strings.TrimPrefix(line, "@handler ")
+		return route
+	}
+
+	// HTTP 方法
+	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
+	for _, method := range methods {
+		if strings.HasPrefix(line, method+" ") {
+			route.Method = method
+			rest := strings.TrimPrefix(line, method+" ")
+
+			// 解析路径和参数
+			parts := strings.SplitN(rest, "(", 2)
+			route.Path = strings.TrimSpace(parts[0])
+
+			if len(parts) > 1 {
+				// 请求类型
+				reqRe := regexp.MustCompile(`\((\w+)\)`)
+				reqMatches := reqRe.FindStringSubmatch(parts[1])
+				if len(reqMatches) > 1 {
+					route.Request = reqMatches[1]
+				}
+
+				// 响应类型
+				respRe := regexp.MustCompile(`returns\s*\((\w+)\)`)
+				respMatches := respRe.FindStringSubmatch(parts[1])
+				if len(respMatches) > 1 {
+					route.Response = respMatches[1]
+				}
+			}
+			return route
+		}
+	}
+
+	return Route{}
+}
+
+// GoType Go 类型映射
+func GoType(gintType string) string {
+	switch gintType {
+	case "int":
+		return "int"
+	case "int64":
+		return "int64"
+	case "int32":
+		return "int32"
+	case "string":
+		return "string"
+	case "bool":
+		return "bool"
+	case "float64":
+		return "float64"
+	case "[]string":
+		return "[]string"
+	case "[]int":
+		return "[]int"
+	case "[]int64":
+		return "[]int64"
+	default:
+		return gintType
+	}
+}
+
+// Validate 验证 API 定义
+func (a *API) Validate() error {
+	if len(a.Types) == 0 {
+		return fmt.Errorf("no types defined")
+	}
+	if len(a.Services) == 0 {
+		return fmt.Errorf("no services defined")
+	}
+	return nil
+}

@@ -1,0 +1,9 @@
+go 1.25.0
+
+use (
+	./gint
+	./gintx
+	./gint-gen
+	./registry
+	./example/user
+)
