@@ -303,13 +303,13 @@ var WiringTmpl = `package wiring
 import (
 	"context"
 
-	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint/gint"
 	"github.com/ink-yht-code/gint/gintx/httpx"
 	"github.com/ink-yht-code/gint/gintx/log"
 	"go.uber.org/zap"
 
 	"{{.Name}}/internal/config"
+	"{{.Name}}/internal/repository"
+	"{{.Name}}/internal/repository/dao"
 	"{{.Name}}/internal/service"
 	"{{.Name}}/internal/web"
 )
@@ -337,7 +337,9 @@ func BuildApp(cfg *config.Config) (*App, error) {
 	}
 
 	// 创建服务
-	svc := service.New{{.NameUpper}}Service(nil) // TODO: 注入 repository
+	var d dao.{{.NameUpper}}DAO = dao.New{{.NameUpper}}DAO()
+	repo := repository.New{{.NameUpper}}Repository(d)
+	svc := service.New{{.NameUpper}}Service(repo)
 
 	// 创建 Handler
 	handler := web.NewHandler(svc)
@@ -391,7 +393,6 @@ import (
 	"context"
 
 	"{{.Name}}/internal/domain/port"
-	"{{.Name}}/internal/repository/dao"
 )
 
 // {{.NameUpper}}Service {{.Name}} 服务
@@ -617,5 +618,24 @@ import (
 type {{.NameUpper}}DAO interface {
 	Save(ctx context.Context, e *entity.{{.NameUpper}}) error
 	FindByID(ctx context.Context, id int64) (*entity.{{.NameUpper}}, error)
+}
+
+// {{.NameUpper}}DAOImpl 内存实现（示例）
+type {{.NameUpper}}DAOImpl struct {
+	data map[int64]*entity.{{.NameUpper}}
+}
+
+// New{{.NameUpper}}DAO 创建 DAO
+func New{{.NameUpper}}DAO() {{.NameUpper}}DAO {
+	return &{{.NameUpper}}DAOImpl{data: make(map[int64]*entity.{{.NameUpper}})}
+}
+
+func (d *{{.NameUpper}}DAOImpl) Save(ctx context.Context, e *entity.{{.NameUpper}}) error {
+	d.data[e.ID] = e
+	return nil
+}
+
+func (d *{{.NameUpper}}DAOImpl) FindByID(ctx context.Context, id int64) (*entity.{{.NameUpper}}, error) {
+	return d.data[id], nil
 }
 `

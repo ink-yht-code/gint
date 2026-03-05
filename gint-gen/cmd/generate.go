@@ -82,9 +82,10 @@ func generateErrorFile(name string) error {
 
 func generateWiringFiles(name string, hasHTTP, hasRPC bool) error {
 	data := generator.ServiceData{
-		Name:    name,
-		HasHTTP: hasHTTP,
-		HasRPC:  hasRPC,
+		Name:      name,
+		NameUpper: strings.Title(name),
+		HasHTTP:   hasHTTP,
+		HasRPC:    hasRPC,
 	}
 	content, err := generator.ExecuteTemplate(template.WiringTmpl, data)
 	if err != nil {
