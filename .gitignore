@@ -33,3 +33,5 @@ temp/
 # Logs
 *.log
 logs/
+
+./test

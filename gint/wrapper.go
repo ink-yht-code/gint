@@ -97,7 +97,18 @@ func B[Req any](fn func(ctx *gctx.Context, req Req) (Result, error)) gin.Handler
 
 		// 绑定请求参数
 		var req Req
-		if err := c.ShouldBind(&req); err != nil {
+
+		// 根据请求方法选择绑定方式
+		var err error
+		if c.Request.Method == "GET" || c.Request.Method == "DELETE" {
+			// GET/DELETE 请求使用 query 参数绑定
+			err = c.ShouldBindQuery(&req)
+		} else {
+			// POST/PUT/PATCH 请求使用 body 绑定
+			err = c.ShouldBind(&req)
+		}
+
+		if err != nil {
 			slog.Debug("绑定参数失败",
 				slog.String("path", c.Request.URL.Path),
 				slog.Any("err", err))

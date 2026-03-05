@@ -316,7 +316,7 @@ import (
 
 // LoadConfig 加载配置
 func LoadConfig(path string) (*config.Config, error) {
-	return config.Load(path), nil
+	return config.Load(path)
 }
 
 // App 应用
