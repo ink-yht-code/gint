@@ -14,6 +14,23 @@
 
 package template
 
+// GoModTmpl go.mod 模板
+var GoModTmpl = `module {{.Name}}
+
+go 1.25
+
+require (
+	github.com/gin-gonic/gin v1.12.0
+	github.com/ink-yht-code/gint/gint v0.0.0
+	github.com/ink-yht-code/gint/gintx v0.0.0
+)
+
+replace (
+	github.com/ink-yht-code/gint/gint => github.com/ink-yht-code/gint/gint v0.1.4
+	github.com/ink-yht-code/gint/gintx => github.com/ink-yht-code/gint/gintx v0.1.4
+)
+`
+
 // GintTmpl .gint 文件模板
 var GintTmpl = `syntax = "v1"
 
@@ -293,7 +310,7 @@ import (
 	"go.uber.org/zap"
 
 	"{{.Name}}/internal/config"
-	"{{.Name}}/internal/server"
+	"{{.Name}}/internal/service"
 	"{{.Name}}/internal/web"
 )
 
@@ -320,7 +337,7 @@ func BuildApp(cfg *config.Config) (*App, error) {
 	}
 
 	// 创建服务
-	svc := server.New{{.NameUpper}}Service()
+	svc := service.New{{.NameUpper}}Service(nil) // TODO: 注入 repository
 
 	// 创建 Handler
 	handler := web.NewHandler(svc)
@@ -367,21 +384,24 @@ func (a *App) Shutdown(ctx context.Context) error {
 }
 `
 
-// ServerTmpl server 模板
-var ServerTmpl = `package server
+// ServiceTmpl service 模板
+var ServiceTmpl = `package service
 
 import (
 	"context"
+
+	"{{.Name}}/internal/domain/port"
+	"{{.Name}}/internal/repository/dao"
 )
 
 // {{.NameUpper}}Service {{.Name}} 服务
 type {{.NameUpper}}Service struct {
-	// TODO: 注入 repository
+	repo port.{{.NameUpper}}Repository
 }
 
 // New{{.NameUpper}}Service 创建服务
-func New{{.NameUpper}}Service() *{{.NameUpper}}Service {
-	return &{{.NameUpper}}Service{}
+func New{{.NameUpper}}Service(repo port.{{.NameUpper}}Repository) *{{.NameUpper}}Service {
+	return &{{.NameUpper}}Service{repo: repo}
 }
 
 // Hello 示例方法
@@ -399,7 +419,7 @@ package web
 import (
 	"github.com/gin-gonic/gin"
 	"github.com/ink-yht-code/gint/gint"
-	"{{.Name}}/internal/server"
+	"{{.Name}}/internal/service"
 )
 
 // Handler HTTP 处理器
@@ -409,11 +429,11 @@ import (
 // - 本文件可被重复生成覆盖
 // - 业务逻辑请在 <service>_handlers.go 中实现
 type Handler struct {
-	svc *server.{{.NameUpper}}Service
+	svc *service.{{.NameUpper}}Service
 }
 
 // NewHandler 创建 Handler
-func NewHandler(svc *server.{{.NameUpper}}Service) *Handler {
+func NewHandler(svc *service.{{.NameUpper}}Service) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -458,18 +478,18 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/ink-yht-code/gint/gint"
 	"github.com/ink-yht-code/gint/gint/gctx"
-	"{{.Name}}/internal/server"
+	"{{.Name}}/internal/service"
 	"{{.Name}}/internal/types"
 )
 
 // Handler HTTP 处理器
 // 实现 gint.Handler 接口
 type Handler struct {
-	svc *server.{{.NameUpper}}Service
+	svc *service.{{.NameUpper}}Service
 }
 
 // NewHandler 创建 Handler
-func NewHandler(svc *server.{{.NameUpper}}Service) *Handler {
+func NewHandler(svc *service.{{.NameUpper}}Service) *Handler {
 	return &Handler{svc: svc}
 }
 
@@ -525,5 +545,77 @@ type HelloReq struct {
 // HelloResp Hello 响应
 type HelloResp struct {
 	Message string ` + "`" + `json:"message"` + "`" + `
+}
+`
+
+// RepositoryPortTmpl repository port 接口模板
+var RepositoryPortTmpl = `package port
+
+import (
+	"context"
+
+	"{{.Name}}/internal/domain/entity"
+)
+
+// {{.NameUpper}}Repository {{.Name}} 仓储接口
+type {{.NameUpper}}Repository interface {
+	// Save 保存实体
+	Save(ctx context.Context, e *entity.{{.NameUpper}}) error
+	// FindByID 根据 ID 查找
+	FindByID(ctx context.Context, id int64) (*entity.{{.NameUpper}}, error)
+}
+`
+
+// RepositoryImplTmpl repository 实现模板
+var RepositoryImplTmpl = `package repository
+
+import (
+	"context"
+
+	"{{.Name}}/internal/domain/entity"
+	"{{.Name}}/internal/domain/port"
+	"{{.Name}}/internal/repository/dao"
+)
+
+type {{.NameUpper}}Repository struct {
+	dao dao.{{.NameUpper}}DAO
+}
+
+func New{{.NameUpper}}Repository(dao dao.{{.NameUpper}}DAO) port.{{.NameUpper}}Repository {
+	return &{{.NameUpper}}Repository{dao: dao}
+}
+
+func (r *{{.NameUpper}}Repository) Save(ctx context.Context, e *entity.{{.NameUpper}}) error {
+	return r.dao.Save(ctx, e)
+}
+
+func (r *{{.NameUpper}}Repository) FindByID(ctx context.Context, id int64) (*entity.{{.NameUpper}}, error) {
+	return r.dao.FindByID(ctx, id)
+}
+`
+
+// EntityTmpl entity 模板
+var EntityTmpl = `package entity
+
+// {{.NameUpper}} {{.Name}} 实体
+type {{.NameUpper}} struct {
+	ID int64 ` + "`" + `json:"id"` + "`" + `
+	// TODO: 添加字段
+}
+`
+
+// DAOTmpl DAO 接口模板
+var DAOTmpl = `package dao
+
+import (
+	"context"
+
+	"{{.Name}}/internal/domain/entity"
+)
+
+// {{.NameUpper}}DAO {{.Name}} DAO 接口
+type {{.NameUpper}}DAO interface {
+	Save(ctx context.Context, e *entity.{{.NameUpper}}) error
+	FindByID(ctx context.Context, id int64) (*entity.{{.NameUpper}}, error)
 }
 `

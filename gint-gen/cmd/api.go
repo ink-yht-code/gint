@@ -140,19 +140,19 @@ func genHandlerGen(name string, api *parser.API) error {
 	buf.WriteString("import (\n")
 	buf.WriteString("\t\"github.com/gin-gonic/gin\"\n")
 	buf.WriteString("\t\"github.com/ink-yht-code/gint\"\n")
-	buf.WriteString("\t\"" + name + "/internal/server\"\n")
+	buf.WriteString("\t\"" + name + "/internal/service\"\n")
 	buf.WriteString(")\n\n")
 
 	// Handler struct
 	buf.WriteString("// Handler HTTP 处理器\n")
 	buf.WriteString("// 实现 gint.Handler 接口\n")
 	buf.WriteString("type Handler struct {\n")
-	buf.WriteString("\tsvc *server." + strings.Title(name) + "Service\n")
+	buf.WriteString("\tsvc *service." + strings.Title(name) + "Service\n")
 	buf.WriteString("}\n\n")
 
 	// NewHandler
 	buf.WriteString("// NewHandler 创建 Handler\n")
-	buf.WriteString("func NewHandler(svc *server." + strings.Title(name) + "Service) *Handler {\n")
+	buf.WriteString("func NewHandler(svc *service." + strings.Title(name) + "Service) *Handler {\n")
 	buf.WriteString("\treturn &Handler{svc: svc}\n")
 	buf.WriteString("}\n\n")
 
@@ -264,7 +264,7 @@ func genServiceHandlersFile(moduleName string, svc parser.Service) error {
 	buf.WriteString("import (\n")
 	buf.WriteString("\t\"github.com/ink-yht-code/gint\"\n")
 	buf.WriteString("\t\"github.com/ink-yht-code/gint/gint/gctx\"\n")
-	buf.WriteString("\t\"" + moduleName + "/internal/server\"\n")
+	buf.WriteString("\t\"" + moduleName + "/internal/service\"\n")
 	buf.WriteString("\t\"" + moduleName + "/internal/types\"\n")
 	buf.WriteString(")\n\n")
 

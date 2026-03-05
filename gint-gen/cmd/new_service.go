@@ -76,7 +76,7 @@ func createService(name string) error {
 		filepath.Join(name, "internal", "repository", "cache"),
 		filepath.Join(name, "internal", "repository", "outbox"),
 		filepath.Join(name, "internal", "types"),
-		filepath.Join(name, "internal", "server"),
+		filepath.Join(name, "internal", "service"),
 		filepath.Join(name, "internal", "web"),
 		filepath.Join(name, "internal", "wiring"),
 	}
@@ -157,8 +157,18 @@ func generateServiceFiles(name string, serviceID int) error {
 		}
 	}
 
-	// 生成 server 示例
+	// 生成 service 示例
 	if err := generateServerFile(name); err != nil {
+		return err
+	}
+
+	// 生成 repository 层 (entity, port, dao, repo)
+	if err := generateRepositoryFiles(name); err != nil {
+		return err
+	}
+
+	// 生成 go.mod
+	if err := generateGoMod(name); err != nil {
 		return err
 	}
 

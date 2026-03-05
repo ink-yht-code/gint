@@ -130,9 +130,61 @@ func generateServerFile(name string) error {
 		Name:      name,
 		NameUpper: strings.Title(name),
 	}
-	content, err := generator.ExecuteTemplate(template.ServerTmpl, data)
+	content, err := generator.ExecuteTemplate(template.ServiceTmpl, data)
 	if err != nil {
 		return err
 	}
-	return generator.GenerateFile(filepath.Join(name, "internal", "server", name+".go"), content)
+	return generator.GenerateFile(filepath.Join(name, "internal", "service", name+".go"), content)
+}
+
+func generateRepositoryFiles(name string) error {
+	data := generator.ServiceData{
+		Name:      name,
+		NameUpper: strings.Title(name),
+	}
+
+	// entity
+	entityContent, err := generator.ExecuteTemplate(template.EntityTmpl, data)
+	if err != nil {
+		return err
+	}
+	if err := generator.GenerateFile(filepath.Join(name, "internal", "domain", "entity", name+".go"), entityContent); err != nil {
+		return err
+	}
+
+	// repository port
+	portContent, err := generator.ExecuteTemplate(template.RepositoryPortTmpl, data)
+	if err != nil {
+		return err
+	}
+	if err := generator.GenerateFile(filepath.Join(name, "internal", "domain", "port", "repository.go"), portContent); err != nil {
+		return err
+	}
+
+	// DAO interface
+	daoContent, err := generator.ExecuteTemplate(template.DAOTmpl, data)
+	if err != nil {
+		return err
+	}
+	if err := generator.GenerateFile(filepath.Join(name, "internal", "repository", "dao", name+".go"), daoContent); err != nil {
+		return err
+	}
+
+	// repository implementation
+	repoContent, err := generator.ExecuteTemplate(template.RepositoryImplTmpl, data)
+	if err != nil {
+		return err
+	}
+	return generator.GenerateFile(filepath.Join(name, "internal", "repository", name+".go"), repoContent)
+}
+
+func generateGoMod(name string) error {
+	data := generator.ServiceData{
+		Name: name,
+	}
+	content, err := generator.ExecuteTemplate(template.GoModTmpl, data)
+	if err != nil {
+		return err
+	}
+	return generator.GenerateFile(filepath.Join(name, "go.mod"), content)
 }
