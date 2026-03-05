@@ -540,7 +540,7 @@ package types
 
 // HelloReq Hello 请求
 type HelloReq struct {
-	Name string ` + "`" + `json:"name"` + "`" + `
+	Name string ` + "`" + `json:"name" form:"name"` + "`" + `
 }
 
 // HelloResp Hello 响应
