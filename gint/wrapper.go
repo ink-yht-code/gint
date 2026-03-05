@@ -24,8 +24,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint/gctx"
-	"github.com/ink-yht-code/gint/session"
+	"github.com/ink-yht-code/gint/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/session"
 )
 
 // W (Wrapper) 基础包装器

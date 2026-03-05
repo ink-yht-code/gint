@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/gctx"
 )
 
 func TestCarrier_Extract_Bearer(t *testing.T) {

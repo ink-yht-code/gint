@@ -19,9 +19,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ink-yht-code/gint/gctx"
-	"github.com/ink-yht-code/gint/internal/jwt"
-	"github.com/ink-yht-code/gint/session"
+	"github.com/ink-yht-code/gint/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/internal/jwt"
+	"github.com/ink-yht-code/gint/gint/session"
 
 	"github.com/google/uuid"
 )

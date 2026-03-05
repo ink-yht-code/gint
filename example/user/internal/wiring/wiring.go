@@ -3,8 +3,8 @@ package wiring
 import (
 	"context"
 
-	"github.com/ink-yht-code/gintx/httpx"
-	"github.com/ink-yht-code/gintx/log"
+	"github.com/ink-yht-code/gint/gintx/httpx"
+	"github.com/ink-yht-code/gint/gintx/log"
 	"go.uber.org/zap"
 
 	"example/user/internal/config"

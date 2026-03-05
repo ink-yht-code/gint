@@ -1,9 +1,9 @@
-//module github.com/ink-code/gint
-module github.com/ink-yht-code/gint
+module github.com/ink-yht-code/gint/gint
 
 go 1.25
 
 require (
+	github.com/casbin/casbin/v2 v2.134.0
 	github.com/dlclark/regexp2 v1.11.5
 	github.com/gin-gonic/gin v1.9.1
 	github.com/golang-jwt/jwt/v5 v5.0.0
@@ -14,7 +14,6 @@ require (
 require (
 	github.com/bmatcuk/doublestar/v4 v4.6.1 // indirect
 	github.com/bytedance/sonic v1.9.1 // indirect
-	github.com/casbin/casbin/v2 v2.134.0 // indirect
 	github.com/casbin/govaluate v1.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/chenzhuoyu/base64x v0.0.0-20221115062448-fe3a3abad311 // indirect

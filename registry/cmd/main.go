@@ -25,8 +25,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/registry/api"
-	"github.com/ink-yht-code/registry/store"
+	"github.com/ink-yht-code/gint/registry/api"
+	"github.com/ink-yht-code/gint/registry/store"
 )
 
 var (

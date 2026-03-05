@@ -19,8 +19,8 @@
 package cookie
 
 import (
-	"github.com/ink-yht-code/gint/gctx"
-	"github.com/ink-yht-code/gint/session"
+	"github.com/ink-yht-code/gint/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/session"
 )
 
 var _ session.TokenCarrier = (*Carrier)(nil)

@@ -16,7 +16,7 @@ package gint
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/gctx"
 )
 
 // Handler 定义了路由处理器接口

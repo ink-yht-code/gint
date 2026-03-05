@@ -263,7 +263,7 @@ func genServiceHandlersFile(moduleName string, svc parser.Service) error {
 	buf.WriteString("package web\n\n")
 	buf.WriteString("import (\n")
 	buf.WriteString("\t\"github.com/ink-yht-code/gint\"\n")
-	buf.WriteString("\t\"github.com/ink-yht-code/gint/gctx\"\n")
+	buf.WriteString("\t\"github.com/ink-yht-code/gint/gint/gctx\"\n")
 	buf.WriteString("\t\"" + moduleName + "/internal/server\"\n")
 	buf.WriteString("\t\"" + moduleName + "/internal/types\"\n")
 	buf.WriteString(")\n\n")

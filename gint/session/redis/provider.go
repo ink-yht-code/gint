@@ -25,9 +25,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/ink-yht-code/gint/gctx"
-	"github.com/ink-yht-code/gint/internal/jwt"
-	"github.com/ink-yht-code/gint/session"
+	"github.com/ink-yht-code/gint/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/internal/jwt"
+	"github.com/ink-yht-code/gint/gint/session"
 )
 
 var _ session.Provider = (*Provider)(nil)

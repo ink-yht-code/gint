@@ -5,8 +5,8 @@ import (
 	"example/user/internal/types"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint"
-	"github.com/ink-yht-code/gint/gctx"
+	"github.com/ink-yht-code/gint/gint"
+	"github.com/ink-yht-code/gint/gint/gctx"
 )
 
 // Handler HTTP 处理器

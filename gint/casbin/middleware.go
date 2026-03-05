@@ -19,9 +19,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint"
-	"github.com/ink-yht-code/gint/gctx"
-	"github.com/ink-yht-code/gint/session"
+	"github.com/ink-yht-code/gint/gint"
+	"github.com/ink-yht-code/gint/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/session"
 )
 
 // Builder Casbin 中间件构建器

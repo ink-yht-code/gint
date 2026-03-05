@@ -287,9 +287,9 @@ import (
 	"context"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint"
-	"github.com/ink-yht-code/gintx/httpx"
-	"github.com/ink-yht-code/gintx/log"
+	"github.com/ink-yht-code/gint/gint"
+	"github.com/ink-yht-code/gint/gintx/httpx"
+	"github.com/ink-yht-code/gint/gintx/log"
 	"go.uber.org/zap"
 
 	"{{.Name}}/internal/config"
@@ -398,7 +398,7 @@ package web
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint"
+	"github.com/ink-yht-code/gint/gint"
 	"{{.Name}}/internal/server"
 )
 
@@ -437,8 +437,8 @@ func (h *Handler) Health(c *gin.Context) {
 var HTTPHandlerImplTmpl = `package web
 
 import (
-	"github.com/ink-yht-code/gint"
-	"github.com/ink-yht-code/gint/gctx"
+	"github.com/ink-yht-code/gint/gint"
+	"github.com/ink-yht-code/gint/gint/gctx"
 	"{{.Name}}/internal/types"
 )
 
@@ -456,8 +456,8 @@ package web
 
 import (
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint"
-	"github.com/ink-yht-code/gint/gctx"
+	"github.com/ink-yht-code/gint/gint"
+	"github.com/ink-yht-code/gint/gint/gctx"
 	"{{.Name}}/internal/server"
 	"{{.Name}}/internal/types"
 )

@@ -18,7 +18,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/registry/store"
+	"github.com/ink-yht-code/gint/registry/store"
 )
 
 // Handler API 处理器

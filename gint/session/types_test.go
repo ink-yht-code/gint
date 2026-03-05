@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/ink-yht-code/gint/gctx"
-	"github.com/ink-yht-code/gint/internal/jwt"
+	"github.com/ink-yht-code/gint/gint/gctx"
+	"github.com/ink-yht-code/gint/gint/internal/jwt"
 )
 
 func init() {
