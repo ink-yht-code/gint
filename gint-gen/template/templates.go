@@ -26,7 +26,7 @@ require (
 )
 
 replace (
-	github.com/ink-yht-code/gint/gint => github.com/ink-yht-code/gint/gint v0.1.6
+	github.com/ink-yht-code/gint/gint => github.com/ink-yht-code/gint/gint v0.1.7
 	github.com/ink-yht-code/gint/gintx => github.com/ink-yht-code/gint/gintx v0.1.5
 )
 `
