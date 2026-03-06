@@ -295,8 +295,9 @@ func (p *Parser) parseField(line string) Field {
 
 // parseRoute 解析路由
 func (p *Parser) parseRoute(line string) Route {
-	// 格式: @handler CreateUser
-	//       POST /users (CreateUserReq) returns (CreateUserResp)
+	// 支持两种格式:
+	// 格式1: POST "/register" Register(RegisterReq) -> HelloResp
+	// 格式2: POST /users (CreateUserReq) returns (CreateUserResp)
 	route := Route{}
 
 	// @handler
@@ -312,9 +313,48 @@ func (p *Parser) parseRoute(line string) Route {
 			route.Method = method
 			rest := strings.TrimPrefix(line, method+" ")
 
-			// 解析路径和参数
+			// 格式1: "/register" Register(RegisterReq) -> HelloResp
+			// 检查是否包含 -> 箭头
+			if strings.Contains(rest, "->") {
+				// 解析格式1
+				parts := strings.SplitN(rest, "->", 2)
+				leftPart := strings.TrimSpace(parts[0])
+				rightPart := strings.TrimSpace(parts[1])
+
+				// 解析响应类型
+				route.Response = strings.TrimSpace(rightPart)
+
+				// 解析左边: "/register" Register(RegisterReq)
+				// 提取路径
+				pathRe := regexp.MustCompile(`^"([^"]+)"\s*`)
+				pathMatches := pathRe.FindStringSubmatch(leftPart)
+				if len(pathMatches) > 1 {
+					route.Path = pathMatches[1]
+					leftPart = strings.TrimPrefix(leftPart, pathMatches[0])
+				} else {
+					// 路径没有引号
+					pathParts := strings.SplitN(leftPart, " ", 2)
+					route.Path = strings.TrimSpace(pathParts[0])
+					if len(pathParts) > 1 {
+						leftPart = pathParts[1]
+					}
+				}
+
+				// 解析 Handler(Req)
+				handlerRe := regexp.MustCompile(`(\w+)\((\w*)\)`)
+				handlerMatches := handlerRe.FindStringSubmatch(leftPart)
+				if len(handlerMatches) > 2 {
+					route.Handler = handlerMatches[1]
+					route.Request = handlerMatches[2]
+				}
+				return route
+			}
+
+			// 格式2: /users (CreateUserReq) returns (CreateUserResp)
 			parts := strings.SplitN(rest, "(", 2)
 			route.Path = strings.TrimSpace(parts[0])
+			// 移除路径中的引号
+			route.Path = strings.Trim(route.Path, `"`)
 
 			if len(parts) > 1 {
 				// 请求类型

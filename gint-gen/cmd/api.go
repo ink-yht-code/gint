@@ -15,6 +15,7 @@
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -27,6 +28,22 @@ import (
 	"github.com/ink-yht-code/gint/gint-gen/parser"
 	"github.com/spf13/cobra"
 )
+
+// getModuleNameFromGoMod 从当前目录的 go.mod 获取模块名
+func getModuleNameFromGoMod() string {
+	data, err := os.ReadFile("go.mod")
+	if err != nil {
+		return ""
+	}
+	scanner := bufio.NewScanner(strings.NewReader(string(data)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "module ") {
+			return strings.TrimPrefix(line, "module ")
+		}
+	}
+	return ""
+}
 
 var apiCmd = &cobra.Command{
 	Use:   "api <name>",
@@ -117,8 +134,18 @@ func genTypes(name string, api *parser.API) error {
 		buf.WriteString(fmt.Sprintf("type %s struct {\n", t.Name))
 		for _, f := range t.Fields {
 			goType := parser.GoType(f.Type)
-			if f.Tag != "" {
-				buf.WriteString(fmt.Sprintf("\t%s %s `%s`\n", f.Name, goType, f.Tag))
+			tag := f.Tag
+			if tag != "" {
+				// 自动添加 form tag 如果只有 json tag
+				if strings.Contains(tag, `json:`) && !strings.Contains(tag, `form:`) {
+					// 提取 json tag 值
+					jsonRe := regexp.MustCompile(`json:"([^"]+)"`)
+					jsonMatches := jsonRe.FindStringSubmatch(tag)
+					if len(jsonMatches) > 1 {
+						tag = tag + ` form:"` + jsonMatches[1] + `"`
+					}
+				}
+				buf.WriteString(fmt.Sprintf("\t%s %s `%s`\n", f.Name, goType, tag))
 			} else {
 				buf.WriteString(fmt.Sprintf("\t%s %s\n", f.Name, goType))
 			}
@@ -126,10 +153,14 @@ func genTypes(name string, api *parser.API) error {
 		buf.WriteString("}\n\n")
 	}
 
-	return generator.GenerateFileForce(
-		filepath.Join(name, "internal", "types", "types_gen.go"),
-		buf.String(),
-	)
+	// 检查是否在服务目录内（存在 internal/types 目录）
+	typesPath := "internal/types/types_gen.go"
+	if _, err := os.Stat("internal/types"); os.IsNotExist(err) {
+		// 不在服务目录内，使用 name 前缀
+		typesPath = filepath.Join(name, "internal", "types", "types_gen.go")
+	}
+
+	return generator.GenerateFileForce(typesPath, buf.String())
 }
 
 func genHandlerGen(name string, api *parser.API) error {
@@ -139,7 +170,7 @@ func genHandlerGen(name string, api *parser.API) error {
 	buf.WriteString("package web\n\n")
 	buf.WriteString("import (\n")
 	buf.WriteString("\t\"github.com/gin-gonic/gin\"\n")
-	buf.WriteString("\t\"github.com/ink-yht-code/gint\"\n")
+	buf.WriteString("\t\"github.com/ink-yht-code/gint/gint\"\n")
 	buf.WriteString("\t\"" + name + "/internal/service\"\n")
 	buf.WriteString(")\n\n")
 
@@ -215,7 +246,13 @@ func genHandlerGen(name string, api *parser.API) error {
 	buf.WriteString("\tc.JSON(200, gin.H{\"status\": \"ok\"})\n")
 	buf.WriteString("}\n")
 
-	return generator.GenerateFileForce(filepath.Join(name, "internal", "web", "handler_gen.go"), buf.String())
+	// 检查是否在服务目录内
+	handlerPath := "internal/web/handler_gen.go"
+	if _, err := os.Stat("internal/web"); os.IsNotExist(err) {
+		handlerPath = filepath.Join(name, "internal", "web", "handler_gen.go")
+	}
+
+	return generator.GenerateFileForce(handlerPath, buf.String())
 }
 
 func genHandlers(name string, api *parser.API) error {
@@ -229,7 +266,20 @@ func genHandlers(name string, api *parser.API) error {
 }
 
 func genServiceHandlersFile(moduleName string, svc parser.Service) error {
-	fileName := filepath.Join(moduleName, "internal", "web", strings.ToLower(svc.Name)+"_handlers.go")
+	// 检查是否在服务目录内
+	fileName := filepath.Join("internal", "web", strings.ToLower(svc.Name)+"_handlers.go")
+	inServiceDir := true
+	if _, err := os.Stat("internal/web"); os.IsNotExist(err) {
+		fileName = filepath.Join(moduleName, "internal", "web", strings.ToLower(svc.Name)+"_handlers.go")
+		inServiceDir = false
+	}
+
+	// 如果在服务目录内，从 go.mod 获取模块名
+	if inServiceDir {
+		if modName := getModuleNameFromGoMod(); modName != "" {
+			moduleName = modName
+		}
+	}
 
 	// read existing methods (incremental append)
 	existing := make(map[string]struct{})
@@ -262,7 +312,7 @@ func genServiceHandlersFile(moduleName string, svc parser.Service) error {
 	// create new file
 	buf.WriteString("package web\n\n")
 	buf.WriteString("import (\n")
-	buf.WriteString("\t\"github.com/ink-yht-code/gint\"\n")
+	buf.WriteString("\t\"github.com/ink-yht-code/gint/gint\"\n")
 	buf.WriteString("\t\"github.com/ink-yht-code/gint/gint/gctx\"\n")
 	buf.WriteString("\t\"" + moduleName + "/internal/service\"\n")
 	buf.WriteString("\t\"" + moduleName + "/internal/types\"\n")

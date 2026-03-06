@@ -26,7 +26,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/ink-yht-code/gint/gint/gctx"
-	"github.com/ink-yht-code/gint/gint/internal/jwt"
+	"github.com/ink-yht-code/gint/gint/jwt"
 	"github.com/ink-yht-code/gint/gint/session"
 )
 

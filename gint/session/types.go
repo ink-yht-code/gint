@@ -24,7 +24,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ink-yht-code/gint/gint/gctx"
-	"github.com/ink-yht-code/gint/gint/internal/jwt"
+	"github.com/ink-yht-code/gint/gint/jwt"
 )
 
 const (
