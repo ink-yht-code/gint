@@ -1,4 +1,4 @@
-module github.com/ink-yht-code/gint
+module github.com/ink-yht-code/gint/v1
 
 go 1.25.0
 
