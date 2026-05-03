@@ -1,13 +1,13 @@
-// Copyright 2025 ink-yht-code
+// 版权所有 2025 ink-yht-code
 //
-// Proprietary License
+// 专有许可
 //
-// IMPORTANT: This software is NOT open source.
-// You may NOT use, copy, modify, merge, publish, distribute, sublicense,
-// or sell copies of this file, in whole or in part, without prior written
-// permission from the copyright holder.
+// 重要说明：本软件并非开源软件。
+// 未经版权持有人事先书面许可，
+// 不得使用、复制、修改、合并、发布、分发、再许可，
+// 也不得全部或部分出售本文件的副本。
 //
-// This software is provided "AS IS", without warranty of any kind.
+// 本软件按“现状”提供，不附带任何形式的担保。
 
 package swagger
 
@@ -21,7 +21,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// Config Swagger 文档配置
+// Config 定义 Swagger 文档配置。
 type Config struct {
 	Title          string
 	Description    string
@@ -38,7 +38,7 @@ type Config struct {
 	}
 }
 
-// Info OpenAPI Info
+// Info 表示 OpenAPI 的基础信息。
 type Info struct {
 	Title          string `json:"title"`
 	Description    string `json:"description,omitempty"`
@@ -55,13 +55,13 @@ type Info struct {
 	} `json:"license,omitempty"`
 }
 
-// Server OpenAPI Server
+// Server 表示 OpenAPI 服务节点。
 type Server struct {
 	URL         string `json:"url"`
 	Description string `json:"description,omitempty"`
 }
 
-// PathItem OpenAPI PathItem
+// PathItem 表示一个接口节点。
 type PathItem struct {
 	Summary     string              `json:"summary,omitempty"`
 	Description string              `json:"description,omitempty"`
@@ -72,10 +72,10 @@ type PathItem struct {
 	Deprecated  bool                `json:"deprecated,omitempty"`
 }
 
-// Parameter OpenAPI Parameter
+// Parameter 表示接口参数。
 type Parameter struct {
 	Name        string      `json:"name"`
-	In          string      `json:"in"` // query, header, path, cookie
+	In          string      `json:"in"` // query、header、path、cookie
 	Description string      `json:"description,omitempty"`
 	Required    bool        `json:"required"`
 	Deprecated  bool        `json:"deprecated,omitempty"`
@@ -83,21 +83,21 @@ type Parameter struct {
 	Example     interface{} `json:"example,omitempty"`
 }
 
-// RequestBody OpenAPI RequestBody
+// RequestBody 表示请求体定义。
 type RequestBody struct {
 	Description string             `json:"description,omitempty"`
 	Required    bool               `json:"required"`
 	Content     map[string]Content `json:"content"`
 }
 
-// Content OpenAPI Content
+// Content 表示内容定义。
 type Content struct {
 	Schema   *Schema     `json:"schema"`
 	Example  interface{} `json:"example,omitempty"`
 	Examples []Example   `json:"examples,omitempty"`
 }
 
-// Example OpenAPI Example
+// Example 表示示例数据。
 type Example struct {
 	Summary       string      `json:"summary,omitempty"`
 	Description   string      `json:"description,omitempty"`
@@ -105,14 +105,14 @@ type Example struct {
 	ExternalValue string      `json:"externalValue,omitempty"`
 }
 
-// Response OpenAPI Response
+// Response 表示接口响应。
 type Response struct {
 	Description string             `json:"description"`
 	Headers     map[string]Header  `json:"headers,omitempty"`
 	Content     map[string]Content `json:"content,omitempty"`
 }
 
-// Header OpenAPI Header
+// Header 表示响应头定义。
 type Header struct {
 	Description string  `json:"description,omitempty"`
 	Required    bool    `json:"required"`
@@ -120,7 +120,7 @@ type Header struct {
 	Schema      *Schema `json:"schema,omitempty"`
 }
 
-// Schema OpenAPI Schema
+// Schema 表示 OpenAPI 数据模型。
 type Schema struct {
 	Type                 string             `json:"type,omitempty"`
 	Format               string             `json:"format,omitempty"`
@@ -141,7 +141,7 @@ type Schema struct {
 	Ref                  string             `json:"$ref,omitempty"`
 }
 
-// Document OpenAPI Document
+// Document 表示 OpenAPI 文档。
 type Document struct {
 	OpenAPI    string                         `json:"openapi"`
 	Info       Info                           `json:"info"`
@@ -151,13 +151,13 @@ type Document struct {
 	Tags       []Tag                          `json:"tags,omitempty"`
 }
 
-// Components OpenAPI Components
+// Components 表示组件定义。
 type Components struct {
 	Schemas         map[string]*Schema        `json:"schemas,omitempty"`
 	SecuritySchemes map[string]SecurityScheme `json:"securitySchemes,omitempty"`
 }
 
-// SecurityScheme OpenAPI SecurityScheme
+// SecurityScheme 表示安全认证方案。
 type SecurityScheme struct {
 	Type         string `json:"type"`
 	Description  string `json:"description,omitempty"`
@@ -167,20 +167,20 @@ type SecurityScheme struct {
 	BearerFormat string `json:"bearerFormat,omitempty"`
 }
 
-// Tag OpenAPI Tag
+// Tag 表示接口标签。
 type Tag struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
 }
 
-// Builder Swagger 文档构建器
+// Builder 用于构建 Swagger 文档。
 type Builder struct {
 	doc      Document
 	schemas  map[string]*Schema
 	security []map[string][]string
 }
 
-// NewBuilder 创建 Swagger 构建器
+// NewBuilder 创建 Swagger 构建器。
 func NewBuilder() *Builder {
 	return &Builder{
 		doc: Document{
@@ -196,37 +196,37 @@ func NewBuilder() *Builder {
 	}
 }
 
-// Title 设置标题
+// Title 设置文档标题。
 func (b *Builder) Title(title string) *Builder {
 	b.doc.Info.Title = title
 	return b
 }
 
-// Description 设置描述
+// Description 设置文档描述。
 func (b *Builder) Description(desc string) *Builder {
 	b.doc.Info.Description = desc
 	return b
 }
 
-// Version 设置版本
+// Version 设置文档版本。
 func (b *Builder) Version(version string) *Builder {
 	b.doc.Info.Version = version
 	return b
 }
 
-// Server 添加服务器
+// Server 添加服务地址。
 func (b *Builder) Server(url, description string) *Builder {
 	b.doc.Servers = append(b.doc.Servers, Server{URL: url, Description: description})
 	return b
 }
 
-// Tag 添加标签
+// Tag 添加文档标签。
 func (b *Builder) Tag(name, description string) *Builder {
 	b.doc.Tags = append(b.doc.Tags, Tag{Name: name, Description: description})
 	return b
 }
 
-// BasicAuth 添加 Basic 认证
+// BasicAuth 添加 Basic 认证方案。
 func (b *Builder) BasicAuth(name string) *Builder {
 	if b.doc.Components.SecuritySchemes == nil {
 		b.doc.Components.SecuritySchemes = make(map[string]SecurityScheme)
@@ -238,7 +238,7 @@ func (b *Builder) BasicAuth(name string) *Builder {
 	return b
 }
 
-// BearerAuth 添加 Bearer 认证
+// BearerAuth 添加 Bearer 认证方案。
 func (b *Builder) BearerAuth(name string) *Builder {
 	if b.doc.Components.SecuritySchemes == nil {
 		b.doc.Components.SecuritySchemes = make(map[string]SecurityScheme)
@@ -251,7 +251,7 @@ func (b *Builder) BearerAuth(name string) *Builder {
 	return b
 }
 
-// ApiKeyAuth 添加 API Key 认证
+// ApiKeyAuth 添加 API Key 认证方案。
 func (b *Builder) ApiKeyAuth(name, in, keyName string) *Builder {
 	if b.doc.Components.SecuritySchemes == nil {
 		b.doc.Components.SecuritySchemes = make(map[string]SecurityScheme)
@@ -259,12 +259,12 @@ func (b *Builder) ApiKeyAuth(name, in, keyName string) *Builder {
 	b.doc.Components.SecuritySchemes[name] = SecurityScheme{
 		Type: "apiKey",
 		Name: keyName,
-		In:   in, // header, query, cookie
+		In:   in, // header、query、cookie
 	}
 	return b
 }
 
-// Path 添加路径
+// Path 添加一个接口路径。
 func (b *Builder) Path(method, path string, item PathItem) *Builder {
 	if b.doc.Paths[path] == nil {
 		b.doc.Paths[path] = make(map[string]PathItem)
@@ -273,46 +273,44 @@ func (b *Builder) Path(method, path string, item PathItem) *Builder {
 	return b
 }
 
-// GET 添加 GET 路径
+// GET 添加 GET 接口。
 func (b *Builder) GET(path string, item PathItem) *Builder {
 	return b.Path("GET", path, item)
 }
 
-// POST 添加 POST 路径
+// POST 添加 POST 接口。
 func (b *Builder) POST(path string, item PathItem) *Builder {
 	return b.Path("POST", path, item)
 }
 
-// PUT 添加 PUT 路径
+// PUT 添加 PUT 接口。
 func (b *Builder) PUT(path string, item PathItem) *Builder {
 	return b.Path("PUT", path, item)
 }
 
-// DELETE 添加 DELETE 路径
+// DELETE 添加 DELETE 接口。
 func (b *Builder) DELETE(path string, item PathItem) *Builder {
 	return b.Path("DELETE", path, item)
 }
 
-// PATCH 添加 PATCH 路径
+// PATCH 添加 PATCH 接口。
 func (b *Builder) PATCH(path string, item PathItem) *Builder {
 	return b.Path("PATCH", path, item)
 }
 
-// Schema 从 Go 类型生成 Schema
+// Schema 根据 Go 类型生成模型定义。
 func (b *Builder) Schema(typ interface{}, name string) *Schema {
 	return b.schemaFromType(reflect.TypeOf(typ), name)
 }
 
-// schemaFromType 从 reflect.Type 生成 Schema
+// schemaFromType 根据 reflect.Type 生成模型定义。
 func (b *Builder) schemaFromType(t reflect.Type, name string) *Schema {
-	// 处理指针
 	if t.Kind() == reflect.Ptr {
 		t = t.Elem()
 	}
 
 	schema := &Schema{}
 
-	// 注册命名类型到 Components
 	if name != "" && t.Name() != "" {
 		if existing, ok := b.schemas[t.Name()]; ok {
 			return existing
@@ -350,17 +348,16 @@ func (b *Builder) schemaFromType(t reflect.Type, name string) *Schema {
 			if jsonTag == "-" {
 				continue
 			}
+
 			fieldName := jsonTag
 			if fieldName == "" {
 				fieldName = field.Name
 			} else {
-				// 处理 json:"name,omitempty"
 				fieldName = strings.Split(fieldName, ",")[0]
 			}
 
 			propSchema := b.schemaFromType(field.Type, "")
 
-			// 从 tag 提取验证信息
 			if binding := field.Tag.Get("binding"); binding != "" {
 				b.applyBinding(schema, propSchema, fieldName, binding)
 			}
@@ -374,7 +371,7 @@ func (b *Builder) schemaFromType(t reflect.Type, name string) *Schema {
 	return schema
 }
 
-// applyBinding 应用 binding 标签到 Schema
+// applyBinding 将 binding 规则应用到模型定义。
 func (b *Builder) applyBinding(parent, schema *Schema, fieldName, binding string) {
 	rules := strings.Split(binding, ",")
 	for _, rule := range rules {
@@ -383,9 +380,9 @@ func (b *Builder) applyBinding(parent, schema *Schema, fieldName, binding string
 		case rule == "required":
 			parent.Required = append(parent.Required, fieldName)
 		case strings.HasPrefix(rule, "min="):
-			// handled by validator
+			// 预留给验证器处理
 		case strings.HasPrefix(rule, "max="):
-			// handled by validator
+			// 预留给验证器处理
 		case rule == "email":
 			schema.Format = "email"
 		case rule == "url":
@@ -394,12 +391,12 @@ func (b *Builder) applyBinding(parent, schema *Schema, fieldName, binding string
 	}
 }
 
-// Build 构建 Document
+// Build 构建文档对象。
 func (b *Builder) Build() Document {
 	return b.doc
 }
 
-// Handler 返回 Swagger JSON 处理器
+// Handler 返回 Swagger JSON 处理器。
 func (b *Builder) Handler() gin.HandlerFunc {
 	doc := b.Build()
 	return func(c *gin.Context) {
@@ -407,7 +404,7 @@ func (b *Builder) Handler() gin.HandlerFunc {
 	}
 }
 
-// UI 返回 Swagger UI 处理器
+// UI 返回 Swagger UI 页面处理器。
 func (b *Builder) UI(specURL string) gin.HandlerFunc {
 	html := swaggerUIHTML(specURL)
 	return func(c *gin.Context) {
@@ -415,28 +412,102 @@ func (b *Builder) UI(specURL string) gin.HandlerFunc {
 	}
 }
 
-// --- 辅助函数 ---
+// Redoc 返回 Redoc 页面处理器。
+func (b *Builder) Redoc(specURL string) gin.HandlerFunc {
+	html := redocHTML(specURL)
+	return func(c *gin.Context) {
+		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+	}
+}
 
 func ptrInt(v int) *int             { return &v }
 func ptrFloat64(v float64) *float64 { return &v }
 
-// swaggerUIHTML 返回 Swagger UI HTML
+// swaggerUIHTML 返回 Swagger UI 页面。
 func swaggerUIHTML(specURL string) string {
 	return `<!DOCTYPE html>
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Swagger UI</title>
-    <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
-    <style>html, body { margin: 0; padding: 0; }</style>
+    <title>接口文档</title>
+    <link rel="stylesheet" type="text/css" href="https://cdn.bootcdn.net/ajax/libs/swagger-ui/5.11.0/swagger-ui.min.css">
+    <style>
+        html, body { margin: 0; padding: 0; }
+        .swagger-ui .topbar { display: none; }
+    </style>
 </head>
 <body>
     <div id="swagger-ui"></div>
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-    <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-standalone-preset.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/swagger-ui/5.11.0/swagger-ui-bundle.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/swagger-ui/5.11.0/swagger-ui-standalone-preset.min.js"></script>
     <script>
+    function replaceText(root) {
+        if (!root) return
+        const textMap = new Map([
+            ['Authorize', '认证'],
+            ['Authorized', '已认证'],
+            ['Available authorizations', '可用认证方式'],
+            ['Logout', '退出认证'],
+            ['Try it out', '开始调试'],
+            ['Execute', '执行'],
+            ['Clear', '清空'],
+            ['Cancel', '取消'],
+            ['Responses', '响应'],
+            ['Response content type', '响应内容类型'],
+            ['Response body', '响应体'],
+            ['Request body', '请求体'],
+            ['Parameters', '参数'],
+            ['No parameters', '无参数'],
+            ['No operations defined in spec!', '文档中未定义任何接口'],
+            ['Schemas', '数据模型'],
+            ['Model', '模型'],
+            ['Example Value', '示例值'],
+            ['Example', '示例'],
+            ['Value', '值'],
+            ['Description', '说明'],
+            ['Details', '详情'],
+            ['Servers', '服务地址'],
+            ['Server', '服务地址'],
+            ['Filter by tag', '按标签筛选'],
+            ['Filter', '筛选'],
+            ['Search', '搜索'],
+            ['Download', '下载'],
+            ['Expand operation', '展开接口'],
+            ['Collapse operation', '收起接口']
+        ])
+
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+        const textNodes = []
+        while (walker.nextNode()) {
+            textNodes.push(walker.currentNode)
+        }
+
+        textNodes.forEach(function(node) {
+            const original = node.nodeValue && node.nodeValue.trim()
+            if (!original) return
+            if (textMap.has(original)) {
+                node.nodeValue = node.nodeValue.replace(original, textMap.get(original))
+            }
+        })
+
+        root.querySelectorAll('input[placeholder]').forEach(function(el) {
+            const placeholderMap = {
+                'Filter': '筛选',
+                'Search': '搜索'
+            }
+            if (placeholderMap[el.placeholder]) {
+                el.placeholder = placeholderMap[el.placeholder]
+            }
+        })
+    }
+
+    function localizeSwaggerUI() {
+        document.title = '接口文档'
+        replaceText(document.body)
+    }
+
     window.onload = function() {
-        const ui = SwaggerUIBundle({
+        SwaggerUIBundle({
             url: "` + specURL + `",
             dom_id: '#swagger-ui',
             presets: [
@@ -445,15 +516,71 @@ func swaggerUIHTML(specURL string) string {
             ],
             layout: "StandaloneLayout"
         })
+
+        localizeSwaggerUI()
+
+        const observer = new MutationObserver(function() {
+            localizeSwaggerUI()
+        })
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        })
     }
     </script>
 </body>
 </html>`
 }
 
-// --- 快捷响应 ---
+// redocHTML 返回 Redoc 页面。
+func redocHTML(specURL string) string {
+	return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>API 文档</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { margin: 0; padding: 0; }
+    </style>
+</head>
+<body>
+    <div id="redoc-container"></div>
+    <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
+    <script>
+        Redoc.init('` + specURL + `', {
+            scrollYOffset: 50,
+            hideDownloadButton: false,
+            expandResponses: '200,201',
+            requiredPropsFirst: true,
+            sortPropsAlphabetically: true,
+            pathInMiddlePanel: true,
+            hideLoading: false,
+            nativeScrollbars: true,
+            theme: {
+                colors: {
+                    primary: {
+                        main: '#1890ff'
+                    }
+                },
+                typography: {
+                    fontSize: '15px',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+                    headings: {
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
+                    }
+                },
+                sidebar: {
+                    width: '260px'
+                }
+            }
+        }, document.getElementById('redoc-container'))
+    </script>
+</body>
+</html>`
+}
 
-// OKResponse 创建 200 响应
+// OKResponse 创建 200 响应定义。
 func OKResponse(description string, schema *Schema) Response {
 	return Response{
 		Description: description,
@@ -463,7 +590,7 @@ func OKResponse(description string, schema *Schema) Response {
 	}
 }
 
-// ErrorResponse 创建错误响应
+// ErrorResponse 创建错误响应定义。
 func ErrorResponse(code int, description string) Response {
 	return Response{
 		Description: description,
@@ -481,7 +608,7 @@ func ErrorResponse(code int, description string) Response {
 	}
 }
 
-// JSONBody 创建 JSON 请求体
+// JSONBody 创建 JSON 请求体定义。
 func JSONBody(schema *Schema, required bool) *RequestBody {
 	return &RequestBody{
 		Required: required,
@@ -491,7 +618,7 @@ func JSONBody(schema *Schema, required bool) *RequestBody {
 	}
 }
 
-// QueryParam 创建查询参数
+// QueryParam 创建查询参数。
 func QueryParam(name, description string, required bool, schema *Schema) Parameter {
 	if schema == nil {
 		schema = &Schema{Type: "string"}
@@ -505,7 +632,7 @@ func QueryParam(name, description string, required bool, schema *Schema) Paramet
 	}
 }
 
-// PathParam 创建路径参数
+// PathParam 创建路径参数。
 func PathParam(name, description string, schema *Schema) Parameter {
 	if schema == nil {
 		schema = &Schema{Type: "string"}
@@ -519,7 +646,7 @@ func PathParam(name, description string, schema *Schema) Parameter {
 	}
 }
 
-// HeaderParam 创建请求头参数
+// HeaderParam 创建请求头参数。
 func HeaderParam(name, description string, required bool) Parameter {
 	return Parameter{
 		Name:        name,
@@ -530,9 +657,7 @@ func HeaderParam(name, description string, required bool) Parameter {
 	}
 }
 
-// --- 自动注册 ---
-
-// RouteInfo 路由信息
+// RouteInfo 表示路由信息。
 type RouteInfo struct {
 	Method      string
 	Path        string
@@ -541,19 +666,16 @@ type RouteInfo struct {
 	Tags        []string
 }
 
-// AutoRegister 自动注册 Gin 路由
+// AutoRegister 自动注册 Gin 路由到文档。
 func (b *Builder) AutoRegister(r *gin.Engine) {
 	routes := r.Routes()
 	for _, route := range routes {
-		// 跳过已注册的 swagger 路由
 		if strings.HasPrefix(route.Path, "/swagger") {
 			continue
 		}
 
 		method := strings.ToLower(route.Method)
 		path := route.Path
-
-		// 提取路径参数
 		params := extractPathParams(path)
 
 		item := PathItem{
@@ -564,7 +686,6 @@ func (b *Builder) AutoRegister(r *gin.Engine) {
 			},
 		}
 
-		// 添加路径参数
 		for _, p := range params {
 			item.Parameters = append(item.Parameters, PathParam(p, p+" 参数", nil))
 		}
@@ -576,7 +697,7 @@ func (b *Builder) AutoRegister(r *gin.Engine) {
 	}
 }
 
-// extractPathParams 提取路径参数
+// extractPathParams 提取路径参数。
 func extractPathParams(path string) []string {
 	re := regexp.MustCompile(`:([^/]+)`)
 	matches := re.FindAllStringSubmatch(path, -1)
@@ -587,17 +708,15 @@ func extractPathParams(path string) []string {
 	return params
 }
 
-// --- 全局 Swagger ---
-
 var defaultBuilder *Builder
 
-// Init 初始化默认 Swagger
+// Init 初始化默认 Swagger 构建器。
 func Init(title, version string) *Builder {
 	defaultBuilder = NewBuilder().Title(title).Version(version)
 	return defaultBuilder
 }
 
-// InitWithConfig 使用 Config 初始化默认 Swagger
+// InitWithConfig 使用配置初始化默认 Swagger 构建器。
 func InitWithConfig(cfg Config) *Builder {
 	b := NewBuilder().
 		Title(cfg.Title).
@@ -621,7 +740,7 @@ func InitWithConfig(cfg Config) *Builder {
 	return defaultBuilder
 }
 
-// Default 获取默认构建器
+// Default 返回默认构建器。
 func Default() *Builder {
 	if defaultBuilder == nil {
 		defaultBuilder = NewBuilder()
@@ -631,12 +750,12 @@ func Default() *Builder {
 
 // Register 注册 Swagger 路由。
 //
-// 默认注册：
+// 默认会注册：
 // - GET /swagger.json
 // - GET /swagger/ui
-// - GET /swagger/index.html（兼容旧文档/习惯用法，等价于 /swagger/ui）
+// - GET /swagger/index.html
 //
-// 注意：Register 不会自动 AutoRegister 路由；如果需要自动收集路由，请使用 Setup。
+// 注意：Register 不会自动收集业务路由；如果需要自动注册，请使用 Setup。
 func Register(r *gin.Engine) *Builder {
 	b := Default()
 
@@ -649,8 +768,7 @@ func Register(r *gin.Engine) *Builder {
 	return b
 }
 
-// Setup 快速设置 Swagger
-// 自动注册 /swagger.json 和 /swagger/ui
+// Setup 快速设置 Swagger，并自动收集已有路由。
 func Setup(r *gin.Engine, title, version string) *Builder {
 	b := Init(title, version)
 	b.AutoRegister(r)
@@ -664,7 +782,7 @@ func Setup(r *gin.Engine, title, version string) *Builder {
 	return b
 }
 
-// Marshal 将 Document 转换为 JSON
+// Marshal 将文档对象转换为 JSON。
 func Marshal(doc Document) ([]byte, error) {
 	return json.MarshalIndent(doc, "", "  ")
 }

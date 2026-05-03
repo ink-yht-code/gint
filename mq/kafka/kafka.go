@@ -2,292 +2,367 @@
 //
 // Proprietary License
 
+// Package kafka 提供基于 Sarama 的 Kafka MQ 实现。
 package kafka
 
 import (
 	"context"
-	"errors"
 	"sync"
+	"time"
 
 	"github.com/IBM/sarama"
 
 	"github.com/ink-yht-code/gint/mq"
 )
 
-// KafkaProducer Kafka 生产者
-type KafkaProducer struct {
-	producer sarama.SyncProducer
-	config   *mq.ProducerConfig
-	closed   bool
-	mu       sync.RWMutex
+const (
+	defaultRetryMax     = 3
+	defaultRetryBackoff = 100 * time.Millisecond
+	msgChanSize         = 1000
+)
+
+// KafkaMQ 实现 mq.MQ 接口
+type KafkaMQ struct {
+	brokers   []string
+	config    *sarama.Config
+	admin     sarama.ClusterAdmin
+	mu        sync.Mutex
+	closed    bool
+	closeOnce sync.Once
+	closeErr  error
+	producers []*KafkaProducer
+	consumers []*KafkaConsumer
 }
 
-// KafkaProducerAsync 异步生产者
-type KafkaProducerAsync struct {
-	producer sarama.AsyncProducer
-	config   *mq.ProducerConfig
-	closed   bool
-	mu       sync.RWMutex
-	wg       sync.WaitGroup
-}
-
-// KafkaConsumer Kafka 消费者
-type KafkaConsumer struct {
-	consumer sarama.ConsumerGroup
-	config   *mq.ConsumerConfig
-	handler  mq.Handler
-	closed   bool
-	mu       sync.RWMutex
-	ready    chan struct{}
-}
-
-// NewProducer 创建 Kafka 生产者
-func NewProducer(config *mq.ProducerConfig) (mq.Producer, error) {
-	saramaConfig := sarama.NewConfig()
-	saramaConfig.Producer.RequiredAcks = sarama.WaitForAll
-	saramaConfig.Producer.Retry.Max = config.RetryCount
-	saramaConfig.Producer.Return.Successes = true
-
-	if config.Timeout > 0 {
-		saramaConfig.Net.ReadTimeout = 0
+// NewMQ 创建 Kafka MQ
+//
+//	m := kafka.NewMQ([]string{"localhost:9092"}, nil)
+//	_ = m.CreateTopic(ctx, "orders", 3)
+//	p, _ := m.Producer("orders")
+//	c, _ := m.Consumer("orders", "payment-svc")
+func NewMQ(brokers []string, cfg *sarama.Config) (mq.MQ, error) {
+	if cfg == nil {
+		cfg = defaultConfig()
 	}
-
-	if config.Async {
-		producer, err := sarama.NewAsyncProducer(config.Brokers, saramaConfig)
-		if err != nil {
-			return nil, err
-		}
-		return &KafkaProducerAsync{
-			producer: producer,
-			config:   config,
-		}, nil
-	}
-
-	producer, err := sarama.NewSyncProducer(config.Brokers, saramaConfig)
+	admin, err := sarama.NewClusterAdmin(brokers, cfg)
 	if err != nil {
 		return nil, err
 	}
-
-	return &KafkaProducer{
-		producer: producer,
-		config:   config,
+	return &KafkaMQ{
+		brokers: brokers,
+		config:  cfg,
+		admin:   admin,
 	}, nil
 }
 
-// Send 发送消息
-func (p *KafkaProducer) Send(ctx context.Context, topic string, msg *mq.Message) error {
+func defaultConfig() *sarama.Config {
+	cfg := sarama.NewConfig()
+	cfg.Producer.RequiredAcks = sarama.WaitForAll
+	cfg.Producer.Retry.Max = defaultRetryMax
+	cfg.Producer.Retry.Backoff = defaultRetryBackoff
+	cfg.Producer.Return.Successes = true
+	cfg.Consumer.Return.Errors = true
+	cfg.Consumer.Offsets.Initial = sarama.OffsetOldest
+	return cfg
+}
+
+func (k *KafkaMQ) CreateTopic(ctx context.Context, topic string, partitions int) error {
 	if topic == "" {
-		topic = p.config.Topic
+		return mq.ErrInvalidTopic
 	}
-
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	if p.closed {
-		return mq.ErrProducerClosed
+	if partitions <= 0 {
+		return mq.ErrInvalidPartition
 	}
-
-	producerMsg := &sarama.ProducerMessage{
-		Topic: topic,
-		Key:   sarama.ByteEncoder(msg.Key),
-		Value: sarama.ByteEncoder(msg.Value),
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
-
-	for k, v := range msg.Headers {
-		producerMsg.Headers = append(producerMsg.Headers, sarama.RecordHeader{
-			Key:   []byte(k),
-			Value: []byte(v),
-		})
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.closed {
+		return mq.ErrMQClosed
 	}
-
-	_, _, err := p.producer.SendMessage(producerMsg)
+	detail := &sarama.TopicDetail{
+		NumPartitions:     int32(partitions),
+		ReplicationFactor: 1,
+	}
+	err := k.admin.CreateTopic(topic, detail, false)
+	// topic 已存在不视为错误
+	if err == sarama.ErrTopicAlreadyExists {
+		return nil
+	}
 	return err
 }
 
-// SendAsync 异步发送消息
-func (p *KafkaProducer) SendAsync(ctx context.Context, topic string, msg *mq.Message, callback func(error)) {
-	go func() {
-		err := p.Send(ctx, topic, msg)
-		if callback != nil {
-			callback(err)
+func (k *KafkaMQ) DeleteTopics(ctx context.Context, topics ...string) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.closed {
+		return mq.ErrMQClosed
+	}
+	for _, topic := range topics {
+		if err := k.admin.DeleteTopic(topic); err != nil && err != sarama.ErrUnknownTopicOrPartition {
+			return err
 		}
-	}()
+	}
+	return nil
 }
 
-// Close 关闭生产者
-func (p *KafkaProducer) Close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.closed {
-		return nil
+func (k *KafkaMQ) Producer(topic string) (mq.Producer, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.closed {
+		return nil, mq.ErrMQClosed
 	}
-	p.closed = true
-	return p.producer.Close()
+	sp, err := sarama.NewSyncProducer(k.brokers, k.config)
+	if err != nil {
+		return nil, err
+	}
+	p := &KafkaProducer{
+		topic:    topic,
+		producer: sp,
+	}
+	k.producers = append(k.producers, p)
+	return p, nil
 }
 
-// Send 发送消息（异步生产者）
-func (p *KafkaProducerAsync) Send(ctx context.Context, topic string, msg *mq.Message) error {
-	if topic == "" {
-		topic = p.config.Topic
+func (k *KafkaMQ) Consumer(topic string, groupID string) (mq.Consumer, error) {
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.closed {
+		return nil, mq.ErrMQClosed
 	}
+	group, err := sarama.NewConsumerGroup(k.brokers, groupID, k.config)
+	if err != nil {
+		return nil, err
+	}
+	closeCtx, cancel := context.WithCancel(context.Background())
+	c := &KafkaConsumer{
+		topic:    topic,
+		groupID:  groupID,
+		group:    group,
+		msgCh:    make(chan *mq.Message, msgChanSize),
+		closeCtx: closeCtx,
+		cancelFn: cancel,
+	}
+	k.consumers = append(k.consumers, c)
+	go c.run()
+	return c, nil
+}
 
+func (k *KafkaMQ) Close() error {
+	k.closeOnce.Do(func() {
+		k.mu.Lock()
+		k.closed = true
+		producers := k.producers
+		consumers := k.consumers
+		k.mu.Unlock()
+
+		for _, p := range producers {
+			if err := p.Close(); err != nil && k.closeErr == nil {
+				k.closeErr = err
+			}
+		}
+		for _, c := range consumers {
+			if err := c.Close(); err != nil && k.closeErr == nil {
+				k.closeErr = err
+			}
+		}
+		if err := k.admin.Close(); err != nil && k.closeErr == nil {
+			k.closeErr = err
+		}
+	})
+	return k.closeErr
+}
+
+// --- KafkaProducer ---
+
+// KafkaProducer Kafka 同步生产者
+type KafkaProducer struct {
+	topic     string
+	producer  sarama.SyncProducer
+	mu        sync.RWMutex
+	closed    bool
+	closeOnce sync.Once
+	closeErr  error
+}
+
+func (p *KafkaProducer) Send(ctx context.Context, msg *mq.Message) (*mq.ProducerResult, error) {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-
 	if p.closed {
-		return mq.ErrProducerClosed
+		return nil, mq.ErrProducerClosed
 	}
-
-	producerMsg := &sarama.ProducerMessage{
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	topic := msg.Topic
+	if topic == "" {
+		topic = p.topic
+	}
+	km := &sarama.ProducerMessage{
 		Topic: topic,
 		Key:   sarama.ByteEncoder(msg.Key),
 		Value: sarama.ByteEncoder(msg.Value),
 	}
-
 	for k, v := range msg.Headers {
-		producerMsg.Headers = append(producerMsg.Headers, sarama.RecordHeader{
-			Key:   []byte(k),
-			Value: []byte(v),
-		})
+		km.Headers = append(km.Headers, sarama.RecordHeader{Key: []byte(k), Value: []byte(v)})
 	}
-
-	p.producer.Input() <- producerMsg
-	return nil
-}
-
-// SendAsync 异步发送消息
-func (p *KafkaProducerAsync) SendAsync(ctx context.Context, topic string, msg *mq.Message, callback func(error)) {
-	p.wg.Add(1)
-	go func() {
-		defer p.wg.Done()
-		err := p.Send(ctx, topic, msg)
-		if callback != nil {
-			callback(err)
-		}
-	}()
-}
-
-// Close 关闭生产者
-func (p *KafkaProducerAsync) Close() error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.closed {
-		return nil
-	}
-	p.closed = true
-	p.wg.Wait()
-	return p.producer.Close()
-}
-
-// NewConsumer 创建 Kafka 消费者
-func NewConsumer(config *mq.ConsumerConfig) (mq.Consumer, error) {
-	saramaConfig := sarama.NewConfig()
-	saramaConfig.Consumer.Return.Errors = true
-
-	if !config.AutoCommit {
-		saramaConfig.Consumer.Offsets.Initial = sarama.OffsetOldest
-	}
-
-	group, err := sarama.NewConsumerGroup(config.Brokers, config.GroupID, saramaConfig)
+	partition, offset, err := p.producer.SendMessage(km)
 	if err != nil {
 		return nil, err
 	}
-
-	return &KafkaConsumer{
-		consumer: group,
-		config:   config,
-		ready:    make(chan struct{}),
-	}, nil
+	return &mq.ProducerResult{Partition: partition, Offset: offset}, nil
 }
 
-// Subscribe 订阅主题
-func (c *KafkaConsumer) Subscribe(topics ...string) error {
-	return nil // Kafka 使用 ConsumerGroup 时在 Consume 中订阅
+func (p *KafkaProducer) SendWithPartition(ctx context.Context, msg *mq.Message, partition int32) (*mq.ProducerResult, error) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	if p.closed {
+		return nil, mq.ErrProducerClosed
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	topic := msg.Topic
+	if topic == "" {
+		topic = p.topic
+	}
+	km := &sarama.ProducerMessage{
+		Topic:     topic,
+		Partition: partition,
+		Key:       sarama.ByteEncoder(msg.Key),
+		Value:     sarama.ByteEncoder(msg.Value),
+	}
+	for k, v := range msg.Headers {
+		km.Headers = append(km.Headers, sarama.RecordHeader{Key: []byte(k), Value: []byte(v)})
+	}
+	part, offset, err := p.producer.SendMessage(km)
+	if err != nil {
+		return nil, err
+	}
+	return &mq.ProducerResult{Partition: part, Offset: offset}, nil
 }
 
-// Unsubscribe 取消订阅
-func (c *KafkaConsumer) Unsubscribe() error {
+func (p *KafkaProducer) Close() error {
+	p.closeOnce.Do(func() {
+		p.mu.Lock()
+		p.closed = true
+		p.mu.Unlock()
+		p.closeErr = p.producer.Close()
+	})
+	return p.closeErr
+}
+
+// --- KafkaConsumer ---
+
+// KafkaConsumer Kafka 消费者，基于 ConsumerGroup
+type KafkaConsumer struct {
+	topic     string
+	groupID   string
+	group     sarama.ConsumerGroup
+	msgCh     chan *mq.Message
+	closeCtx  context.Context
+	cancelFn  context.CancelFunc
+	closeOnce sync.Once
+	closeErr  error
+}
+
+// run 持续从 Kafka 拉取消息，rebalance 后自动重连
+func (c *KafkaConsumer) run() {
+	defer close(c.msgCh)
+	handler := &cgHandler{msgCh: c.msgCh, closeCtx: c.closeCtx}
+	for {
+		if err := c.group.Consume(c.closeCtx, []string{c.topic}, handler); err != nil {
+			return
+		}
+		if c.closeCtx.Err() != nil {
+			return
+		}
+		// rebalance 后重置 ready，继续消费
+		handler.ready = false
+	}
+}
+
+func (c *KafkaConsumer) Consume(ctx context.Context) (*mq.Message, error) {
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case msg, ok := <-c.msgCh:
+		if !ok {
+			return nil, mq.ErrConsumerClosed
+		}
+		return msg, nil
+	}
+}
+
+func (c *KafkaConsumer) ConsumeChan(ctx context.Context) (<-chan *mq.Message, error) {
+	if c.closeCtx.Err() != nil {
+		return nil, mq.ErrConsumerClosed
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return c.msgCh, nil
+}
+
+func (c *KafkaConsumer) Close() error {
+	c.closeOnce.Do(func() {
+		c.cancelFn()
+		c.closeErr = c.group.Close()
+	})
+	return c.closeErr
+}
+
+// --- cgHandler ---
+
+type cgHandler struct {
+	msgCh    chan *mq.Message
+	closeCtx context.Context
+	ready    bool
+}
+
+func (h *cgHandler) Setup(_ sarama.ConsumerGroupSession) error {
+	h.ready = true
 	return nil
 }
 
-// Consume 消费消息
-func (c *KafkaConsumer) Consume(ctx context.Context, handler mq.Handler) error {
-	c.handler = handler
+func (h *cgHandler) Cleanup(_ sarama.ConsumerGroupSession) error { return nil }
 
-	topics := []string{c.config.Topic}
-	if len(topics) == 0 {
-		return errors.New("no topics to consume")
-	}
-
-	wg := &sync.WaitGroup{}
-
+func (h *cgHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
 	for {
 		select {
-		case <-ctx.Done():
-			wg.Wait()
-			return ctx.Err()
-		default:
-			err := c.consumer.Consume(ctx, topics, &consumerGroupHandler{
-				handler: handler,
-				ready:   c.ready,
-			})
-			if err != nil {
-				return err
+		case km, ok := <-claim.Messages():
+			if !ok {
+				return nil
 			}
+			msg := &mq.Message{
+				Topic:     km.Topic,
+				Key:       km.Key,
+				Value:     km.Value,
+				Timestamp: km.Timestamp.UnixMilli(),
+				Partition: km.Partition,
+				Offset:    km.Offset,
+				Headers:   make(map[string]string, len(km.Headers)),
+			}
+			for _, h := range km.Headers {
+				msg.Headers[string(h.Key)] = string(h.Value)
+			}
+			select {
+			case h.msgCh <- msg:
+				session.MarkMessage(km, "")
+			case <-h.closeCtx.Done():
+				return nil
+			}
+		case <-session.Context().Done():
+			return nil
 		}
 	}
 }
 
-// Close 关闭消费者
-func (c *KafkaConsumer) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.closed {
-		return nil
-	}
-	c.closed = true
-	return c.consumer.Close()
-}
-
-// consumerGroupHandler Sarama ConsumerGroup Handler 实现
-type consumerGroupHandler struct {
-	handler mq.Handler
-	ready   chan struct{}
-}
-
-func (h *consumerGroupHandler) Setup(sarama.ConsumerGroupSession) error {
-	close(h.ready)
-	return nil
-}
-
-func (h *consumerGroupHandler) Cleanup(sarama.ConsumerGroupSession) error {
-	return nil
-}
-
-func (h *consumerGroupHandler) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
-	for msg := range claim.Messages() {
-		message := &mq.Message{
-			Topic:     msg.Topic,
-			Key:       string(msg.Key),
-			Value:     msg.Value,
-			Timestamp: msg.Timestamp.UnixMilli(),
-			Partition: msg.Partition,
-			Offset:    msg.Offset,
-			Headers:   make(map[string]string),
-		}
-
-		for _, header := range msg.Headers {
-			message.Headers[string(header.Key)] = string(header.Value)
-		}
-
-		if err := h.handler(session.Context(), message); err != nil {
-			return err
-		}
-
-		session.MarkMessage(msg, "")
-	}
-	return nil
-}
+// 编译期接口检查
+var _ mq.MQ = (*KafkaMQ)(nil)
+var _ mq.Producer = (*KafkaProducer)(nil)
+var _ mq.Consumer = (*KafkaConsumer)(nil)

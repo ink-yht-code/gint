@@ -1,123 +1,95 @@
-# Session管理
+# 会话管理
 
-当前版本 Session 模块基于 `session.Provider` 工作，不再使用旧版 Manager API。
+当前版本的会话模块以 `session.Provider` 为核心，不再以旧的 manager-first 模式为主。
 
 ## 核心接口
 
-### Provider
+### 提供者接口
 
 ```go
 type Provider interface {
-    NewSession(ctx *gctx.Context, userId string, jwtData map[string]string, sessData map[string]any) (Session, error)
-    Get(ctx *gctx.Context) (Session, error)
-    Destroy(ctx *gctx.Context) error
-    RenewToken(ctx *gctx.Context) error
+	NewSession(ctx *gctx.Context, userId string, jwtData map[string]string, sessData map[string]any) (Session, error)
+	Get(ctx *gctx.Context) (Session, error)
+	Destroy(ctx *gctx.Context) error
+	RenewToken(ctx *gctx.Context) error
 }
 ```
 
-### Session
+### 会话接口
 
 ```go
 type Session interface {
-    Set(ctx context.Context, key string, val any) error
-    Get(ctx context.Context, key string) (any, error)
-    Del(ctx context.Context, key string) error
-    Destroy(ctx context.Context) error
-    Claims() *jwt.Claims
-    UserContext(ctx context.Context) (*gctx.UserContext, error)
-    Refresh(ctx context.Context) error
+	Set(ctx context.Context, key string, val any) error
+	Get(ctx context.Context, key string) (any, error)
+	Del(ctx context.Context, key string) error
+	Destroy(ctx context.Context) error
+	Claims() *jwt.Claims
+	UserContext(ctx context.Context) (*gctx.UserContext, error)
+	Refresh(ctx context.Context) error
 }
 ```
 
-## 提供者实现
+## 提供者实现方式
 
-- `session/memory`：内存实现，适合开发与测试
-- `session/redis`：Redis 实现，适合生产环境
+- `session/memory`：适合本地开发和测试
+- `session/redis`：适合生产环境
 
-两者都使用双 token 机制（access + refresh），并通过 `session.TokenCarrier` 进行 token 注入与提取。
-
-## TokenCarrier
+## 令牌载体
 
 - `session/cookie.NewCarrier(...)`
-- `session/header.NewCarrier()` 或 `session/header.NewCarrierWithHeader("X-Token")`
+- `session/header.NewCarrier()`
+- `session/header.NewCarrierWithHeader("X-Token")`
 
-## 初始化方式
-
-### 全局 provider
+## 设置全局会话提供者
 
 ```go
-import (
-    "time"
-
-    "github.com/ink-yht-code/gint/session"
-    "github.com/ink-yht-code/gint/session/cookie"
-    "github.com/ink-yht-code/gint/session/memory"
-)
-
 provider := memory.NewProvider(
-    "jwt-secret",
-    2*time.Hour,        // access token 过期
-    7*24*time.Hour,     // refresh token / session 过期
-    cookie.NewCarrier("gint_token"),
+	"jwt-secret",
+	2*time.Hour,
+	7*24*time.Hour,
+	cookie.NewCarrier("gint_token"),
 )
 session.SetDefaultProvider(provider)
 ```
 
-### 按请求覆盖 provider
-
-```go
-func middleware(provider session.Provider) gin.HandlerFunc {
-    return func(c *gin.Context) {
-        ctx := &gctx.Context{Context: c}
-        session.SetProvider(ctx, provider)
-        c.Next()
-    }
-}
-```
-
-## 常见操作
-
-### 创建会话（登录）
+## 创建会话
 
 ```go
 ctx := &gctx.Context{Context: c}
 sess, err := session.NewSession(
-    ctx,
-    "user-1",
-    map[string]string{"role": "admin"},        // jwtData
-    map[string]any{"username": "tom"},         // sessData
+	ctx,
+	"user-1",
+	map[string]string{"role": "admin"},
+	map[string]any{"username": "tom"},
 )
 _ = sess
 _ = err
 ```
 
-### 获取会话
+## 获取会话
 
 ```go
 ctx := &gctx.Context{Context: c}
 sess, err := session.Get(ctx)
 if err != nil {
-    c.AbortWithStatus(401)
-    return
+	c.AbortWithStatus(401)
+	return
 }
-uc, _ := sess.UserContext(c.Request.Context())
-_ = uc
+_ = sess
 ```
 
-### 销毁会话（登出）
+## 销毁会话
 
 ```go
 ctx := &gctx.Context{Context: c}
-sess, err := session.Get(ctx)
-if err == nil {
-    _ = sess.Destroy(c.Request.Context())
+if err := session.DefaultProvider().Destroy(ctx); err != nil {
+	c.AbortWithStatus(401)
+	return
 }
 ```
 
-> 若需要同时清理载体中的 token，推荐直接调用当前 provider 的 `Destroy(ctx)`（例如在统一登出逻辑中）。
+## 建议
 
-## 使用建议
-
-- 生产环境优先用 Redis Provider
-- 若使用 Cookie 载体，务必评估 `HttpOnly/Secure/SameSite`
-- 刷新 token 依赖 `X-Refresh-Token` 头，网关层需允许透传
+- 生产环境优先使用 Redis 会话提供者
+- 如果使用 Cookie，注意 `HttpOnly`、`Secure`、`SameSite`
+- Token 刷新策略要和前端载体保持一致

@@ -1,17 +1,17 @@
-// Copyright 2025 ink-yht-code
+// 版权所有 2025 ink-yht-code
 //
-// Proprietary License
+// 专有许可
 //
-// IMPORTANT: This software is NOT open source.
-// You may NOT use, copy, modify, merge, publish, distribute, sublicense,
-// or sell copies of this file, in whole or in part, without prior written
-// permission from the copyright holder.
+// 重要说明：本软件并非开源软件。
+// 未经版权持有人事先书面许可，
+// 不得使用、复制、修改、合并、发布、分发、再许可，
+// 也不得全部或部分出售本文件的副本。
 //
-// This software is provided "AS IS", without warranty of any kind.
+// 本软件按“现状”提供，不附带任何形式的担保。
 //
-// This file is derived from ginx (https://github.com/ecodeclub/ginx)
-// Original Copyright by ecodeclub and contributors
-// Modifications: Simplified implementation
+// 本文件基于 ginx（https://github.com/ecodeclub/ginx）改造而来
+// 原始版权归 ecodeclub 及其贡献者所有
+// 当前版本为简化实现
 
 package accesslog
 
@@ -26,26 +26,26 @@ import (
 	"go.uber.org/zap"
 )
 
-// AccessLog 访问日志结构
+// AccessLog 表示一次访问日志记录。
 type AccessLog struct {
 	Method    string `json:"method"`     // HTTP 方法
 	Path      string `json:"path"`       // 请求路径
 	Query     string `json:"query"`      // 查询参数
 	IP        string `json:"ip"`         // 客户端 IP
-	UserID    string `json:"user_id"`    // 用户 ID（如果已登录）
+	UserID    string `json:"user_id"`    // 用户 ID
 	TraceID   string `json:"trace_id"`   // 链路追踪 ID
 	ReqBody   string `json:"req_body"`   // 请求体
 	RespBody  string `json:"resp_body"`  // 响应体
 	Status    int    `json:"status"`     // HTTP 状态码
-	Duration  int64  `json:"duration"`   // 处理时间（毫秒）
+	Duration  int64  `json:"duration"`   // 处理耗时，单位毫秒
 	Error     string `json:"error"`      // 错误信息
 	UserAgent string `json:"user_agent"` // User-Agent
 }
 
-// LogFunc 日志处理函数类型
+// LogFunc 定义日志处理函数类型。
 type LogFunc func(log *AccessLog)
 
-// ZapLogFunc 创建使用 zap logger 的日志处理函数
+// ZapLogFunc 创建一个基于 zap 的访问日志处理函数。
 func ZapLogFunc() LogFunc {
 	return func(log *AccessLog) {
 		fields := []zap.Field{
@@ -75,61 +75,75 @@ func ZapLogFunc() LogFunc {
 			fields = append(fields, zap.String("error", log.Error))
 		}
 
-		// 根据状态码选择日志级别
 		switch {
 		case log.Status >= 500:
-			logger.Error("http_request", fields...)
+			logger.Error("HTTP访问日志", fields...)
 		case log.Status >= 400:
-			logger.Warn("http_request", fields...)
+			logger.Warn("HTTP访问日志", fields...)
 		default:
-			logger.Info("http_request", fields...)
+			logger.Info("HTTP访问日志", fields...)
 		}
 	}
 }
 
-// Builder 访问日志中间件构建器
+// Builder 用于构建访问日志中间件。
 type Builder struct {
-	logFunc       LogFunc // 日志处理函数
-	logReqBody    bool    // 是否记录请求体
-	logRespBody   bool    // 是否记录响应体
-	maxBodyLength int     // 最大记录长度
+	logFunc       LogFunc
+	logReqBody    bool
+	logRespBody   bool
+	maxBodyLength int
+	sampleRate    float64 // 0 表示全量，0.1 表示 10% 采样
+	errorOnly     bool    // 只记录 4xx/5xx
 }
 
-// NewBuilder 创建访问日志中间件构建器
+// NewBuilder 创建访问日志中间件构建器。
 func NewBuilder(logFunc LogFunc) *Builder {
 	return &Builder{
 		logFunc:       logFunc,
 		logReqBody:    false,
 		logRespBody:   false,
-		maxBodyLength: 1024, // 默认最大 1KB
+		maxBodyLength: 1024,
+		sampleRate:    0,
+		errorOnly:     false,
 	}
 }
 
-// WithReqBody 设置是否记录请求体
+// WithReqBody 设置是否记录请求体。
 func (b *Builder) WithReqBody(log bool) *Builder {
 	b.logReqBody = log
 	return b
 }
 
-// WithRespBody 设置是否记录响应体
+// WithRespBody 设置是否记录响应体。
 func (b *Builder) WithRespBody(log bool) *Builder {
 	b.logRespBody = log
 	return b
 }
 
-// WithMaxBodyLength 设置最大记录长度
+// WithMaxBodyLength 设置请求体与响应体的最大记录长度。
 func (b *Builder) WithMaxBodyLength(length int) *Builder {
 	b.maxBodyLength = length
 	return b
 }
 
-// Build 构建中间件
+// WithSampleRate 设置采样率（0-1），0 表示全量记录，0.1 表示 10% 采样。
+func (b *Builder) WithSampleRate(rate float64) *Builder {
+	b.sampleRate = rate
+	return b
+}
+
+// WithErrorOnly 只记录 4xx/5xx 请求。
+func (b *Builder) WithErrorOnly(errorOnly bool) *Builder {
+	b.errorOnly = errorOnly
+	return b
+}
+
+// Build 构建访问日志中间件。
 func (b *Builder) Build() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
 		ctx := &gctx.Context{Context: c}
 
-		// 创建日志对象
 		log := &AccessLog{
 			Method:    c.Request.Method,
 			Path:      c.Request.URL.Path,
@@ -140,20 +154,17 @@ func (b *Builder) Build() gin.HandlerFunc {
 			UserAgent: c.Request.UserAgent(),
 		}
 
-		// 记录请求体
 		if b.logReqBody && c.Request.Body != nil {
 			bodyBytes, _ := io.ReadAll(c.Request.Body)
-			// 恢复请求体，以便后续处理
 			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 			if len(bodyBytes) > b.maxBodyLength {
-				log.ReqBody = string(bodyBytes[:b.maxBodyLength]) + "...(truncated)"
+				log.ReqBody = string(bodyBytes[:b.maxBodyLength]) + "...(已截断)"
 			} else {
 				log.ReqBody = string(bodyBytes)
 			}
 		}
 
-		// 如果需要记录响应体，使用自定义 ResponseWriter
 		if b.logRespBody {
 			writer := &responseWriter{
 				ResponseWriter: c.Writer,
@@ -161,44 +172,50 @@ func (b *Builder) Build() gin.HandlerFunc {
 			}
 			c.Writer = writer
 
-			// 执行请求处理
 			c.Next()
 
-			// 记录响应体
 			respBody := writer.body.String()
 			if len(respBody) > b.maxBodyLength {
-				log.RespBody = respBody[:b.maxBodyLength] + "...(truncated)"
+				log.RespBody = respBody[:b.maxBodyLength] + "...(已截断)"
 			} else {
 				log.RespBody = respBody
 			}
 		} else {
-			// 执行请求处理
 			c.Next()
 		}
 
-		// 记录状态码和处理时间
 		log.Status = c.Writer.Status()
 		log.Duration = time.Since(start).Milliseconds()
 
-		// 记录错误信息
 		if len(c.Errors) > 0 {
 			log.Error = c.Errors.String()
 		}
 
-		// 调用日志处理函数
+		// 只记录错误请求
+		if b.errorOnly && log.Status < 400 {
+			return
+		}
+
+		// 采样：按概率跳过
+		if b.sampleRate > 0 && b.sampleRate < 1 {
+			// 用 duration 纳秒的低位做伪随机，避免引入 math/rand 依赖
+			if float64(time.Since(start).Nanoseconds()%1000)/1000.0 > b.sampleRate {
+				return
+			}
+		}
+
 		b.logFunc(log)
 	}
 }
 
-// responseWriter 自定义 ResponseWriter，用于捕获响应体
+// responseWriter 用于捕获响应体内容。
 type responseWriter struct {
 	gin.ResponseWriter
 	body *bytes.Buffer
 }
 
-// Write 写入响应体
+// Write 同时写入原始响应和内存缓冲。
 func (w *responseWriter) Write(data []byte) (int, error) {
-	// 同时写入到 body 缓冲区和原始 Writer
 	w.body.Write(data)
 	return w.ResponseWriter.Write(data)
 }

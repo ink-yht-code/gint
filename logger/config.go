@@ -1,50 +1,50 @@
-// Copyright 2025 ink-yht-code
+// 版权所有 2025 ink-yht-code
 //
-// Proprietary License
+// 专有许可
 //
-// IMPORTANT: This software is NOT open source.
-// You may NOT use, copy, modify, merge, publish, distribute, sublicense,
-// or sell copies of this file, in whole or in part, without prior written
-// permission from the copyright holder.
+// 重要说明：本软件并非开源软件。
+// 未经版权持有人事先书面许可，
+// 不得使用、复制、修改、合并、发布、分发、再许可，
+// 也不得全部或部分出售本文件的副本。
 //
-// This software is provided "AS IS", without warranty of any kind.
+// 本软件按“现状”提供，不附带任何形式的担保。
 
 package logger
 
-// Config 日志配置
+// Config 定义日志配置。
 type Config struct {
-	// Level 日志级别: debug, info, warn, error
+	// Level 日志级别，可选值：debug、info、warn、error。
 	Level string `yaml:"level" json:"level"`
 
-	// Format 日志格式: json, text
+	// Format 日志格式，可选值：json、text。
 	Format string `yaml:"format" json:"format"`
 
-	// Output 输出目标: stdout, file, both
+	// Output 输出位置，可选值：stdout、file、both。
 	Output string `yaml:"output" json:"output"`
 
-	// Filename 日志文件路径（当 Output 为 file 或 both 时有效）
+	// Filename 在输出到文件时指定日志文件路径。
 	Filename string `yaml:"filename" json:"filename"`
 
-	// MaxSize 单个日志文件最大大小（MB）
+	// MaxSize 单个日志文件的最大大小，单位为 MB。
 	MaxSize int `yaml:"max_size" json:"max_size"`
 
-	// MaxBackups 保留的旧日志文件最大数量
+	// MaxBackups 保留的历史日志文件数量。
 	MaxBackups int `yaml:"max_backups" json:"max_backups"`
 
-	// MaxAge 保留旧日志文件的最大天数
+	// MaxAge 历史日志文件的保留天数。
 	MaxAge int `yaml:"max_age" json:"max_age"`
 
-	// Compress 是否压缩旧日志文件
+	// Compress 控制轮转后的日志文件是否压缩。
 	Compress bool `yaml:"compress" json:"compress"`
 
-	// EnableDB 是否启用数据库日志
+	// EnableDB 控制是否同时写入数据库日志。
 	EnableDB bool `yaml:"enable_db" json:"enable_db"`
 
-	// DBLevel 数据库日志最低级别
+	// DBLevel 指定写入数据库日志的最低级别。
 	DBLevel string `yaml:"db_level" json:"db_level"`
 }
 
-// DefaultConfig 返回默认配置
+// DefaultConfig 返回一份安全的默认日志配置。
 func DefaultConfig() Config {
 	return Config{
 		Level:      "info",

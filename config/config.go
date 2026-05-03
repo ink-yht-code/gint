@@ -1,13 +1,13 @@
-// Copyright 2025 ink-yht-code
+// 版权所有 2025 ink-yht-code
 //
-// Proprietary License
+// 专有许可
 //
-// IMPORTANT: This software is NOT open source.
-// You may NOT use, copy, modify, merge, publish, distribute, sublicense,
-// or sell copies of this file, in whole or in part, without prior written
-// permission from the copyright holder.
+// 重要说明：本软件并非开源软件。
+// 未经版权持有人事先书面许可，
+// 不得使用、复制、修改、合并、发布、分发、再许可，
+// 也不得全部或部分出售本文件的副本。
 //
-// This software is provided "AS IS", without warranty of any kind.
+// 本软件按“现状”提供，不附带任何形式的担保。
 
 package config
 
@@ -25,25 +25,23 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Config 配置管理器
+// Config 管理来自多个来源的应用配置。
 type Config struct {
 	data    map[string]any
 	sources []Source
 	mu      sync.RWMutex
 }
 
-// Source 配置源接口
+// Source 定义配置源，负责加载配置数据。
 type Source interface {
-	// Load 加载配置
 	Load() (map[string]any, error)
-	// Name 配置源名称
 	Name() string
 }
 
-// Option 配置选项
+// Option 用于定制 Config 实例。
 type Option func(*Config)
 
-// New 创建配置管理器
+// New 创建一个配置管理器。
 func New(opts ...Option) *Config {
 	c := &Config{
 		data:    make(map[string]any),
@@ -57,7 +55,7 @@ func New(opts ...Option) *Config {
 	return c
 }
 
-// Load 加载所有配置源
+// Load 按顺序加载所有已注册的配置源。
 func (c *Config) Load() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -72,8 +70,9 @@ func (c *Config) Load() error {
 			loadErrs = append(loadErrs, fmt.Errorf("%s: %w", source.Name(), err))
 			continue
 		}
+
 		c.merge(data)
-		logger.Info("配置源加载成功", zap.String("source", source.Name()))
+		logger.Info("配置源加载完成", zap.String("source", source.Name()))
 	}
 
 	if len(loadErrs) > 0 {
@@ -82,14 +81,14 @@ func (c *Config) Load() error {
 	return nil
 }
 
-// merge 合并配置（后面的覆盖前面的）
+// merge 使用后面的配置源覆盖前面的同名配置。
 func (c *Config) merge(data map[string]any) {
 	for k, v := range data {
 		c.data[k] = v
 	}
 }
 
-// Get 获取配置值
+// Get 使用点号路径读取配置值。
 func (c *Config) Get(key string) any {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -113,7 +112,7 @@ func (c *Config) Get(key string) any {
 	return value
 }
 
-// GetString 获取字符串配置
+// GetString 返回字符串配置值。
 func (c *Config) GetString(key string, defaultValue ...string) string {
 	val := c.Get(key)
 	if val == nil {
@@ -128,7 +127,7 @@ func (c *Config) GetString(key string, defaultValue ...string) string {
 	return fmt.Sprintf("%v", val)
 }
 
-// GetInt 获取整数配置
+// GetInt 返回整数配置值。
 func (c *Config) GetInt(key string, defaultValue ...int) int {
 	val := c.Get(key)
 	if val == nil {
@@ -149,7 +148,7 @@ func (c *Config) GetInt(key string, defaultValue ...int) int {
 	}
 }
 
-// GetInt64 获取 int64 配置
+// GetInt64 返回 int64 配置值。
 func (c *Config) GetInt64(key string, defaultValue ...int64) int64 {
 	val := c.Get(key)
 	if val == nil {
@@ -170,7 +169,7 @@ func (c *Config) GetInt64(key string, defaultValue ...int64) int64 {
 	}
 }
 
-// GetBool 获取布尔配置
+// GetBool 返回布尔配置值。
 func (c *Config) GetBool(key string, defaultValue ...bool) bool {
 	val := c.Get(key)
 	if val == nil {
@@ -189,7 +188,7 @@ func (c *Config) GetBool(key string, defaultValue ...bool) bool {
 	}
 }
 
-// GetFloat64 获取浮点配置
+// GetFloat64 返回 float64 配置值。
 func (c *Config) GetFloat64(key string, defaultValue ...float64) float64 {
 	val := c.Get(key)
 	if val == nil {
@@ -210,7 +209,7 @@ func (c *Config) GetFloat64(key string, defaultValue ...float64) float64 {
 	}
 }
 
-// GetStringSlice 获取字符串数组配置
+// GetStringSlice 返回字符串切片配置值。
 func (c *Config) GetStringSlice(key string, defaultValue ...[]string) []string {
 	val := c.Get(key)
 	if val == nil {
@@ -236,7 +235,7 @@ func (c *Config) GetStringSlice(key string, defaultValue ...[]string) []string {
 	}
 }
 
-// GetStringMap 获取字符串映射配置
+// GetStringMap 返回 map[string]string 配置值。
 func (c *Config) GetStringMap(key string, defaultValue ...map[string]string) map[string]string {
 	val := c.Get(key)
 	if val == nil {
@@ -259,14 +258,13 @@ func (c *Config) GetStringMap(key string, defaultValue ...map[string]string) map
 	return nil
 }
 
-// Unmarshal 将配置解析到结构体
+// Unmarshal 将指定配置节点解码到目标结构体中。
 func (c *Config) Unmarshal(key string, target any) error {
 	val := c.Get(key)
 	if val == nil {
-		return fmt.Errorf("配置项 %s 不存在", key)
+		return fmt.Errorf("未找到配置项 %s", key)
 	}
 
-	// 先转为 JSON 再解析
 	data, err := json.Marshal(val)
 	if err != nil {
 		return err
@@ -275,21 +273,19 @@ func (c *Config) Unmarshal(key string, target any) error {
 	return json.Unmarshal(data, target)
 }
 
-// --- 配置源实现 ---
-
-// FileSource 文件配置源
+// FileSource 表示文件配置源。
 type FileSource struct {
 	path string
 }
 
-// WithFile 添加文件配置源
+// WithFile 注册一个文件配置源。
 func WithFile(path string) Option {
 	return func(c *Config) {
 		c.sources = append(c.sources, &FileSource{path: path})
 	}
 }
 
-// Load 加载文件配置
+// Load 读取配置文件并解析为 map。
 func (s *FileSource) Load() (map[string]any, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
@@ -315,25 +311,25 @@ func (s *FileSource) Load() (map[string]any, error) {
 	return result, nil
 }
 
-// Name 返回配置源名称
+// Name 返回配置源名称。
 func (s *FileSource) Name() string {
 	return fmt.Sprintf("file:%s", s.path)
 }
 
-// EnvSource 环境变量配置源
+// EnvSource 表示环境变量配置源。
 type EnvSource struct {
 	prefix string
 }
 
-// WithEnv 添加环境变量配置源
-// prefix: 环境变量前缀，如 "APP_" 会读取 APP_DB_HOST 转换为 db.host
+// WithEnv 注册一个环境变量配置源。
+// 例如前缀为 APP_ 时，APP_DB_HOST 会映射为 db.host。
 func WithEnv(prefix string) Option {
 	return func(c *Config) {
 		c.sources = append(c.sources, &EnvSource{prefix: prefix})
 	}
 }
 
-// Load 加载环境变量配置
+// Load 将环境变量读取为嵌套 map 结构。
 func (s *EnvSource) Load() (map[string]any, error) {
 	result := make(map[string]any)
 
@@ -342,7 +338,6 @@ func (s *EnvSource) Load() (map[string]any, error) {
 			continue
 		}
 
-		// 解析 KEY=VALUE
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) != 2 {
 			continue
@@ -351,8 +346,6 @@ func (s *EnvSource) Load() (map[string]any, error) {
 		key := strings.TrimPrefix(parts[0], s.prefix)
 		value := parts[1]
 
-		// 转换为小写并替换下划线为点
-		// APP_DB_HOST -> db.host
 		keys := strings.Split(strings.ToLower(key), "_")
 		s.setNested(result, keys, value)
 	}
@@ -360,7 +353,7 @@ func (s *EnvSource) Load() (map[string]any, error) {
 	return result, nil
 }
 
-// setNested 设置嵌套值
+// setNested 将值写入目标 map 的嵌套路径中。
 func (s *EnvSource) setNested(data map[string]any, keys []string, value string) {
 	for i, k := range keys {
 		if i == len(keys)-1 {
@@ -378,18 +371,18 @@ func (s *EnvSource) setNested(data map[string]any, keys []string, value string) 
 	}
 }
 
-// Name 返回配置源名称
+// Name 返回配置源名称。
 func (s *EnvSource) Name() string {
 	return fmt.Sprintf("env:%s", s.prefix)
 }
 
-// MapSource 内存映射配置源
+// MapSource 表示内存中的配置源。
 type MapSource struct {
 	name string
 	data map[string]any
 }
 
-// WithMap 添加内存映射配置源
+// WithMap 注册一个内存配置源。
 func WithMap(data map[string]any, name ...string) Option {
 	n := "map"
 	if len(name) > 0 {
@@ -400,30 +393,28 @@ func WithMap(data map[string]any, name ...string) Option {
 	}
 }
 
-// Load 加载内存配置
+// Load 返回内存中的配置数据。
 func (s *MapSource) Load() (map[string]any, error) {
 	return s.data, nil
 }
 
-// Name 返回配置源名称
+// Name 返回配置源名称。
 func (s *MapSource) Name() string {
 	return fmt.Sprintf("map:%s", s.name)
 }
 
-// --- 全局配置 ---
-
 var defaultConfig *Config
 var configOnce sync.Once
 
-// Init 初始化默认配置
+// Init 初始化全局默认配置，只会执行一次。
 func Init(opts ...Option) {
 	configOnce.Do(func() {
 		defaultConfig = New(opts...)
-		defaultConfig.Load()
+		_ = defaultConfig.Load()
 	})
 }
 
-// Get 从默认配置获取值
+// Get 从全局默认配置中读取值。
 func Get(key string) any {
 	if defaultConfig == nil {
 		return nil
@@ -431,7 +422,7 @@ func Get(key string) any {
 	return defaultConfig.Get(key)
 }
 
-// GetString 从默认配置获取字符串
+// GetString 从全局默认配置中读取字符串。
 func GetString(key string, defaultValue ...string) string {
 	if defaultConfig == nil {
 		if len(defaultValue) > 0 {
@@ -442,7 +433,7 @@ func GetString(key string, defaultValue ...string) string {
 	return defaultConfig.GetString(key, defaultValue...)
 }
 
-// GetInt 从默认配置获取整数
+// GetInt 从全局默认配置中读取整数。
 func GetInt(key string, defaultValue ...int) int {
 	if defaultConfig == nil {
 		if len(defaultValue) > 0 {
@@ -453,7 +444,7 @@ func GetInt(key string, defaultValue ...int) int {
 	return defaultConfig.GetInt(key, defaultValue...)
 }
 
-// GetBool 从默认配置获取布尔值
+// GetBool 从全局默认配置中读取布尔值。
 func GetBool(key string, defaultValue ...bool) bool {
 	if defaultConfig == nil {
 		if len(defaultValue) > 0 {
@@ -464,14 +455,12 @@ func GetBool(key string, defaultValue ...bool) bool {
 	return defaultConfig.GetBool(key, defaultValue...)
 }
 
-// Default 获取默认配置管理器
+// Default 返回全局默认配置实例。
 func Default() *Config {
 	return defaultConfig
 }
 
-// --- 快捷加载函数 ---
-
-// LoadFile 快捷加载单个配置文件
+// LoadFile 加载单个配置文件。
 func LoadFile(path string) (*Config, error) {
 	c := New(WithFile(path))
 	if err := c.Load(); err != nil {
@@ -480,8 +469,7 @@ func LoadFile(path string) (*Config, error) {
 	return c, nil
 }
 
-// LoadApp 快捷加载应用配置
-// 默认加载 config.yaml 和环境变量（APP_ 前缀）
+// LoadApp 加载应用配置文件，并叠加 APP_ 前缀的环境变量配置。
 func LoadApp(configPath ...string) (*Config, error) {
 	path := "config.yaml"
 	if len(configPath) > 0 {

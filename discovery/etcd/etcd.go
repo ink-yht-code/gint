@@ -2,6 +2,9 @@
 //
 // Proprietary License
 
+// Package etcd 提供基于 etcd 的服务注册与发现功能。
+// Registry 同时实现了 discovery.RegistryDiscovery 接口，
+// 可直接通过 discovery.SetDefault(r) 设为全局注册中心。
 package etcd
 
 import (
@@ -17,43 +20,50 @@ import (
 )
 
 var (
-	ErrNotRegistered = errors.New("service not registered")
-	ErrKeyNotFound   = errors.New("key not found")
+	ErrNotRegistered = errors.New("etcd: service not registered")
+	ErrKeyNotFound   = errors.New("etcd: key not found")
 )
 
-// Registry etcd 服务注册中心
+// Registry 基于 etcd 的服务注册与发现，实现 discovery.RegistryDiscovery 接口。
 type Registry struct {
-	client   *clientv3.Client
-	leaseID  clientv3.LeaseID
-	kv       clientv3.KV
-	lease    clientv3.Lease
-	mu       sync.RWMutex
+	client  *clientv3.Client
+	kv      clientv3.KV
+	lease   clientv3.Lease
+	prefix  string
+	ttl     int64
+	ctx     context.Context
+	cancel  context.CancelFunc
+	wg      sync.WaitGroup
+	mu      sync.RWMutex
+	// leases 记录每个实例对应的租约，key 为 serviceKey
+	leases  map[string]clientv3.LeaseID
+	// services 记录已注册的实例，key 为 serviceKey
 	services map[string]*discovery.ServiceInstance
-	prefix   string
-	ttl      int64
-	ctx      context.Context
-	cancel   context.CancelFunc
-	wg       sync.WaitGroup
 }
 
 // Option 注册中心选项
 type Option func(*Registry)
 
-// WithPrefix 设置 key 前缀
+// WithPrefix 设置 key 前缀，默认 "/services/"
 func WithPrefix(prefix string) Option {
 	return func(r *Registry) {
 		r.prefix = prefix
 	}
 }
 
-// WithTTL 设置租约 TTL（秒）
+// WithTTL 设置租约 TTL（秒），默认 30
 func WithTTL(ttl int64) Option {
 	return func(r *Registry) {
 		r.ttl = ttl
 	}
 }
 
-// New 创建 etcd 服务注册中心
+// New 创建 etcd 注册中心。
+//
+// 用法：
+//
+//	r, err := etcd.New([]string{"127.0.0.1:2379"})
+//	discovery.SetDefault(r)
 func New(endpoints []string, opts ...Option) (*Registry, error) {
 	client, err := clientv3.New(clientv3.Config{
 		Endpoints:            endpoints,
@@ -69,89 +79,104 @@ func New(endpoints []string, opts ...Option) (*Registry, error) {
 		client:   client,
 		kv:       clientv3.NewKV(client),
 		lease:    clientv3.NewLease(client),
-		services: make(map[string]*discovery.ServiceInstance),
 		prefix:   "/services/",
 		ttl:      30,
+		leases:   make(map[string]clientv3.LeaseID),
+		services: make(map[string]*discovery.ServiceInstance),
 	}
-
 	for _, opt := range opts {
 		opt(r)
 	}
-
 	r.ctx, r.cancel = context.WithCancel(context.Background())
-
 	return r, nil
 }
 
-// Register 注册服务
-func (r *Registry) Register(ctx context.Context, service *discovery.ServiceInstance) error {
+// ---- discovery.Registry 接口 ----
+
+// Register 注册服务实例，使用独立租约并自动保活。
+func (r *Registry) Register(ctx context.Context, instance *discovery.ServiceInstance) error {
+	key := r.serviceKey(instance.Name, instance.ID)
+
+	value, err := json.Marshal(instance)
+	if err != nil {
+		return err
+	}
+
+	// 为每个实例创建独立租约
+	resp, err := r.lease.Grant(ctx, r.ttl)
+	if err != nil {
+		return err
+	}
+	leaseID := resp.ID
+
+	if _, err = r.kv.Put(ctx, key, string(value), clientv3.WithLease(leaseID)); err != nil {
+		_, _ = r.lease.Revoke(context.Background(), leaseID)
+		return err
+	}
+
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	r.leases[key] = leaseID
+	r.services[key] = instance
+	r.mu.Unlock()
 
-	key := r.serviceKey(service.Name, service.ID)
-	value, err := json.Marshal(service)
-	if err != nil {
-		return err
-	}
+	// 启动保活协程
+	r.wg.Add(1)
+	go r.keepAlive(key, leaseID)
 
-	// 创建租约
-	if r.leaseID == 0 {
-		resp, err := r.lease.Grant(ctx, r.ttl)
-		if err != nil {
-			return err
-		}
-		r.leaseID = resp.ID
-
-		// 启动保活
-		r.wg.Add(1)
-		go r.keepAlive()
-	}
-
-	// 注册服务
-	_, err = r.kv.Put(ctx, key, string(value), clientv3.WithLease(r.leaseID))
-	if err != nil {
-		return err
-	}
-
-	r.services[key] = service
 	return nil
 }
 
-// Deregister 注销服务
-func (r *Registry) Deregister(ctx context.Context, service *discovery.ServiceInstance) error {
+// Deregister 注销服务实例，撤销租约并删除 key。
+func (r *Registry) Deregister(ctx context.Context, instance *discovery.ServiceInstance) error {
+	key := r.serviceKey(instance.Name, instance.ID)
+
 	r.mu.Lock()
-	defer r.mu.Unlock()
+	leaseID, ok := r.leases[key]
+	if ok {
+		delete(r.leases, key)
+		delete(r.services, key)
+	}
+	r.mu.Unlock()
 
-	key := r.serviceKey(service.Name, service.ID)
-
+	if ok && leaseID != 0 {
+		_, _ = r.lease.Revoke(ctx, leaseID)
+	}
 	_, err := r.kv.Delete(ctx, key)
-	if err != nil {
-		return err
-	}
-
-	delete(r.services, key)
-	return nil
+	return err
 }
 
-// GetInstance 获取单个服务实例
+// Heartbeat 手动续约（通常不需要调用，Register 已自动保活）。
+func (r *Registry) Heartbeat(ctx context.Context, instance *discovery.ServiceInstance) error {
+	key := r.serviceKey(instance.Name, instance.ID)
+
+	r.mu.RLock()
+	leaseID, ok := r.leases[key]
+	r.mu.RUnlock()
+
+	if !ok {
+		return ErrNotRegistered
+	}
+	_, err := r.lease.KeepAliveOnce(ctx, leaseID)
+	return err
+}
+
+// ---- discovery.Discovery 接口 ----
+
+// GetInstance 获取单个健康实例（返回第一个）。
 func (r *Registry) GetInstance(ctx context.Context, serviceName string) (*discovery.ServiceInstance, error) {
 	instances, err := r.GetInstances(ctx, serviceName)
 	if err != nil {
 		return nil, err
 	}
-
 	if len(instances) == 0 {
-		return nil, ErrKeyNotFound
+		return nil, discovery.ErrNoInstance
 	}
-
-	// 简单轮询，实际应使用负载均衡
 	return instances[0], nil
 }
 
-// GetInstances 获取所有服务实例
+// GetInstances 获取指定服务的所有实例。
 func (r *Registry) GetInstances(ctx context.Context, serviceName string) ([]*discovery.ServiceInstance, error) {
 	prefix := r.prefix + serviceName + "/"
-
 	resp, err := r.kv.Get(ctx, prefix, clientv3.WithPrefix())
 	if err != nil {
 		return nil, err
@@ -159,77 +184,103 @@ func (r *Registry) GetInstances(ctx context.Context, serviceName string) ([]*dis
 
 	instances := make([]*discovery.ServiceInstance, 0, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
-		var instance discovery.ServiceInstance
-		if err := json.Unmarshal(kv.Value, &instance); err != nil {
+		var inst discovery.ServiceInstance
+		if err := json.Unmarshal(kv.Value, &inst); err != nil {
 			continue
 		}
-		instances = append(instances, &instance)
+		instances = append(instances, &inst)
 	}
-
 	return instances, nil
 }
 
-// Watch 监听服务变化
-func (r *Registry) Watch(ctx context.Context, serviceName string, handler discovery.WatchHandler) error {
+// Watch 监听服务实例变化，返回一个 channel，每次变化推送最新实例列表。
+// 调用方应在不再需要时 cancel 传入的 ctx 以释放资源。
+func (r *Registry) Watch(ctx context.Context, serviceName string) (<-chan []*discovery.ServiceInstance, error) {
 	prefix := r.prefix + serviceName + "/"
+	ch := make(chan []*discovery.ServiceInstance, 8)
 
-	watcher := clientv3.NewWatcher(r.client)
-	defer watcher.Close()
+	// 先推送一次当前快照
+	instances, err := r.GetInstances(ctx, serviceName)
+	if err != nil {
+		return nil, err
+	}
+	ch <- instances
 
-	watchChan := watcher.Watch(ctx, prefix, clientv3.WithPrefix())
+	r.wg.Add(1)
+	go func() {
+		defer r.wg.Done()
+		defer close(ch)
 
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case resp, ok := <-watchChan:
-			if !ok {
-				return errors.New("watch channel closed")
-			}
+		watcher := clientv3.NewWatcher(r.client)
+		defer watcher.Close()
 
-			for _, event := range resp.Events {
-				var instance discovery.ServiceInstance
-				if err := json.Unmarshal(event.Kv.Value, &instance); err != nil {
+		watchCh := watcher.Watch(ctx, prefix, clientv3.WithPrefix())
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-r.ctx.Done():
+				return
+			case resp, ok := <-watchCh:
+				if !ok {
+					return
+				}
+				if resp.Err() != nil {
 					continue
 				}
-
-				switch event.Type {
-				case clientv3.EventTypePut:
-					handler.OnAdd(&instance)
-				case clientv3.EventTypeDelete:
-					handler.OnDelete(&instance)
+				// 有变化时重新拉取完整列表
+				latest, err := r.GetInstances(ctx, serviceName)
+				if err != nil {
+					continue
+				}
+				select {
+				case ch <- latest:
+				default:
+					// 消费方来不及消费时丢弃旧快照，保留最新
+					select {
+					case <-ch:
+					default:
+					}
+					ch <- latest
 				}
 			}
 		}
-	}
+	}()
+
+	return ch, nil
 }
 
-// Close 关闭注册中心
+// Close 关闭注册中心，撤销所有租约并等待后台协程退出。
 func (r *Registry) Close() error {
 	r.cancel()
-	r.wg.Wait()
 
-	// 注销所有服务
+	// 撤销所有租约（会触发 etcd 自动删除对应 key）
 	r.mu.RLock()
-	for _, service := range r.services {
-		key := r.serviceKey(service.Name, service.ID)
-		_, _ = r.kv.Delete(context.Background(), key)
+	leases := make(map[string]clientv3.LeaseID, len(r.leases))
+	for k, v := range r.leases {
+		leases[k] = v
 	}
 	r.mu.RUnlock()
 
-	// 撤销租约
-	if r.leaseID != 0 {
-		_, _ = r.lease.Revoke(context.Background(), r.leaseID)
+	for _, leaseID := range leases {
+		_, _ = r.lease.Revoke(context.Background(), leaseID)
 	}
 
+	r.wg.Wait()
 	return r.client.Close()
 }
 
-// keepAlive 保持租约
-func (r *Registry) keepAlive() {
+// ---- 内部方法 ----
+
+// keepAlive 为单个实例的租约持续保活，租约过期时自动重新注册。
+func (r *Registry) keepAlive(key string, leaseID clientv3.LeaseID) {
 	defer r.wg.Done()
 
-	ticker := time.NewTicker(time.Duration(r.ttl/3) * time.Second)
+	interval := time.Duration(r.ttl/3) * time.Second
+	if interval < time.Second {
+		interval = time.Second
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
@@ -237,113 +288,38 @@ func (r *Registry) keepAlive() {
 		case <-r.ctx.Done():
 			return
 		case <-ticker.C:
-			_, err := r.lease.KeepAliveOnce(r.ctx, r.leaseID)
-			if err != nil {
-				// 租约过期，尝试重新创建
-				resp, err := r.lease.Grant(r.ctx, r.ttl)
-				if err != nil {
-					continue
-				}
-				r.leaseID = resp.ID
-
-				// 重新注册所有服务
-				r.mu.RLock()
-				for key, service := range r.services {
-					value, _ := json.Marshal(service)
-					_, _ = r.kv.Put(r.ctx, key, string(value), clientv3.WithLease(r.leaseID))
-				}
-				r.mu.RUnlock()
+			_, err := r.lease.KeepAliveOnce(r.ctx, leaseID)
+			if err == nil {
+				continue
 			}
+			// 租约过期，重新申请并写回
+			r.mu.RLock()
+			instance, ok := r.services[key]
+			r.mu.RUnlock()
+			if !ok {
+				return // 已被 Deregister，退出
+			}
+
+			newResp, err := r.lease.Grant(r.ctx, r.ttl)
+			if err != nil {
+				continue
+			}
+			newLeaseID := newResp.ID
+
+			value, _ := json.Marshal(instance)
+			if _, err = r.kv.Put(r.ctx, key, string(value), clientv3.WithLease(newLeaseID)); err != nil {
+				_, _ = r.lease.Revoke(context.Background(), newLeaseID)
+				continue
+			}
+
+			r.mu.Lock()
+			r.leases[key] = newLeaseID
+			r.mu.Unlock()
+			leaseID = newLeaseID
 		}
 	}
 }
 
-// serviceKey 生成服务 key
 func (r *Registry) serviceKey(name, id string) string {
 	return r.prefix + name + "/" + id
-}
-
-// Discovery etcd 服务发现客户端
-type Discovery struct {
-	registry *Registry
-	cache    map[string][]*discovery.ServiceInstance
-	mu       sync.RWMutex
-}
-
-// NewDiscovery 创建服务发现客户端
-func NewDiscovery(registry *Registry) *Discovery {
-	return &Discovery{
-		registry: registry,
-		cache:    make(map[string][]*discovery.ServiceInstance),
-	}
-}
-
-// GetInstance 获取单个实例
-func (d *Discovery) GetInstance(ctx context.Context, serviceName string) (*discovery.ServiceInstance, error) {
-	return d.registry.GetInstance(ctx, serviceName)
-}
-
-// GetInstances 获取所有实例
-func (d *Discovery) GetInstances(ctx context.Context, serviceName string) ([]*discovery.ServiceInstance, error) {
-	// 先查缓存
-	d.mu.RLock()
-	if instances, ok := d.cache[serviceName]; ok && len(instances) > 0 {
-		d.mu.RUnlock()
-		return instances, nil
-	}
-	d.mu.RUnlock()
-
-	// 从 etcd 获取
-	instances, err := d.registry.GetInstances(ctx, serviceName)
-	if err != nil {
-		return nil, err
-	}
-
-	// 更新缓存
-	d.mu.Lock()
-	d.cache[serviceName] = instances
-	d.mu.Unlock()
-
-	return instances, nil
-}
-
-// Watch 监听服务变化
-func (d *Discovery) Watch(ctx context.Context, serviceName string, handler discovery.WatchHandler) error {
-	return d.registry.Watch(ctx, serviceName, &cacheHandler{
-		discovery: d,
-		handler:   handler,
-		service:   serviceName,
-	})
-}
-
-// cacheHandler 带缓存更新的处理器
-type cacheHandler struct {
-	discovery *Discovery
-	handler   discovery.WatchHandler
-	service   string
-}
-
-func (h *cacheHandler) OnAdd(instance *discovery.ServiceInstance) {
-	h.discovery.mu.Lock()
-	instances := h.discovery.cache[h.service]
-	instances = append(instances, instance)
-	h.discovery.cache[h.service] = instances
-	h.discovery.mu.Unlock()
-
-	h.handler.OnAdd(instance)
-}
-
-func (h *cacheHandler) OnDelete(instance *discovery.ServiceInstance) {
-	h.discovery.mu.Lock()
-	instances := h.discovery.cache[h.service]
-	for i, ins := range instances {
-		if ins.ID == instance.ID {
-			instances = append(instances[:i], instances[i+1:]...)
-			break
-		}
-	}
-	h.discovery.cache[h.service] = instances
-	h.discovery.mu.Unlock()
-
-	h.handler.OnDelete(instance)
 }

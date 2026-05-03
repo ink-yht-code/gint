@@ -1,13 +1,13 @@
-// Copyright 2025 ink-yht-code
+// 版权所有 2025 ink-yht-code
 //
-// Proprietary License
+// 专有许可
 //
-// IMPORTANT: This software is NOT open source.
-// You may NOT use, copy, modify, merge, publish, distribute, sublicense,
-// or sell copies of this file, in whole or in part, without prior written
-// permission from the copyright holder.
+// 重要说明：本软件并非开源软件。
+// 未经版权持有人事先书面许可，
+// 不得使用、复制、修改、合并、发布、分发、再许可，
+// 也不得全部或部分出售本文件的副本。
 //
-// This software is provided "AS IS", without warranty of any kind.
+// 本软件按“现状”提供，不附带任何形式的担保。
 
 package logger
 
@@ -29,7 +29,6 @@ var (
 	Logger *zap.Logger
 	sugar  *zap.SugaredLogger
 
-	// 数据库日志相关
 	enableDBLog    bool
 	minDBLogLevel  zapcore.Level
 	dbLogWriter    DBLogWriter
@@ -37,22 +36,19 @@ var (
 )
 
 func init() {
-	// 避免调用方未 Init 时出现 nil panic
 	Logger = zap.NewNop()
 	sugar = Logger.Sugar()
 }
 
-// DBLogWriter 数据库日志写入器接口
+// DBLogWriter 定义数据库日志写入器。
 type DBLogWriter interface {
 	WriteLog(level, module, message string, fields map[string]any, traceID, userID string)
 }
 
-// Init 初始化 zap 日志
+// Init 初始化全局 zap 日志器。
 func Init(cfg Config) error {
-	// 1. 设置日志级别
 	level := parseLevel(cfg.Level)
 
-	// 2. 设置编码器配置
 	encoderConfig := zapcore.EncoderConfig{
 		TimeKey:        "time",
 		LevelKey:       "level",
@@ -68,17 +64,13 @@ func Init(cfg Config) error {
 		EncodeCaller:   zapcore.ShortCallerEncoder,
 	}
 
-	// 3. 构建 cores
 	core := zapcore.NewTee(buildCores(cfg, encoderConfig, level)...)
 
-	// 4. 创建 logger，添加调用者信息，跳过一层（封装层）
 	Logger = zap.New(core, zap.AddCaller(), zap.AddCallerSkip(1))
 	sugar = Logger.Sugar()
 
-	// 5. 替换全局 logger
 	zap.ReplaceGlobals(Logger)
 
-	// 6. 初始化数据库日志配置
 	enableDBLog = cfg.EnableDB
 	minDBLogLevel = parseLevel(cfg.DBLevel)
 
@@ -93,17 +85,14 @@ func Init(cfg Config) error {
 	return nil
 }
 
-// buildCores 创建多输出 cores
-// 控制台始终使用 text 彩色格式，文件按配置格式
+// buildCores 创建日志输出目标，控制台始终使用带颜色的文本格式。
 func buildCores(cfg Config, encoderConfig zapcore.EncoderConfig, level zapcore.LevelEnabler) []zapcore.Core {
 	var cores []zapcore.Core
 
-	// 控制台编码器：text + 彩色
 	consoleCfg := encoderConfig
 	consoleCfg.EncodeLevel = encodeLevelColor
 	consoleEncoder := zapcore.NewConsoleEncoder(consoleCfg)
 
-	// 文件编码器：按配置
 	fileCfg := encoderConfig
 	if cfg.Format == "json" {
 		fileCfg.EncodeLevel = zapcore.LowercaseLevelEncoder
@@ -126,27 +115,27 @@ func buildCores(cfg Config, encoderConfig zapcore.EncoderConfig, level zapcore.L
 			zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), level),
 			zapcore.NewCore(fileEncoder, createFileSyncer(cfg), level),
 		)
-	default: // stdout
+	default:
 		cores = append(cores, zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), level))
 	}
 
 	return cores
 }
 
-// encodeLevelColor 为不同级别添加 ANSI 颜色
+// encodeLevelColor 使用 ANSI 转义码为控制台日志级别着色。
 func encodeLevelColor(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	var color string
 	switch level {
 	case zapcore.DebugLevel:
-		color = "\x1b[36m" // 青色
+		color = "\x1b[36m"
 	case zapcore.InfoLevel:
-		color = "\x1b[32m" // 绿色
+		color = "\x1b[32m"
 	case zapcore.WarnLevel:
-		color = "\x1b[33m" // 黄色
+		color = "\x1b[33m"
 	case zapcore.ErrorLevel:
-		color = "\x1b[31m" // 红色
+		color = "\x1b[31m"
 	case zapcore.DPanicLevel, zapcore.PanicLevel, zapcore.FatalLevel:
-		color = "\x1b[35m" // 洋红
+		color = "\x1b[35m"
 	default:
 		color = ""
 	}
@@ -159,7 +148,7 @@ func encodeLevelColor(level zapcore.Level, enc zapcore.PrimitiveArrayEncoder) {
 	enc.AppendString(levelText)
 }
 
-// parseLevel 解析日志级别
+// parseLevel 将字符串日志级别转换为 zapcore.Level。
 func parseLevel(level string) zapcore.Level {
 	switch level {
 	case "debug":
@@ -175,17 +164,15 @@ func parseLevel(level string) zapcore.Level {
 	}
 }
 
-// createFileSyncer 创建文件同步器（支持日志轮转）
+// createFileSyncer 创建支持轮转的文件写入器。
 func createFileSyncer(cfg Config) zapcore.WriteSyncer {
-	// 确保日志目录存在
 	if dir := filepath.Dir(cfg.Filename); dir != "" && dir != "." {
 		_ = os.MkdirAll(dir, 0755)
 	}
 
-	// 使用自定义日志轮转器
 	rotator := &fileRotator{
 		filename:   cfg.Filename,
-		maxSize:    int64(cfg.MaxSize) * 1024 * 1024, // MB -> Bytes
+		maxSize:    int64(cfg.MaxSize) * 1024 * 1024,
 		maxBackups: cfg.MaxBackups,
 		maxAge:     cfg.MaxAge,
 		compress:   cfg.Compress,
@@ -194,7 +181,7 @@ func createFileSyncer(cfg Config) zapcore.WriteSyncer {
 	return zapcore.AddSync(rotator)
 }
 
-// fileRotator 自定义日志文件轮转器
+// fileRotator 是一个简化版的日志轮转写入器。
 type fileRotator struct {
 	filename   string
 	maxSize    int64
@@ -211,7 +198,7 @@ type fileRotator struct {
 
 func (r *fileRotator) init() {
 	r.baseName, r.ext = splitExt(r.filename)
-	r.openNew()
+	_ = r.openNew()
 	go r.cleanup()
 }
 
@@ -225,7 +212,6 @@ func (r *fileRotator) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	// 检查是否需要轮转
 	if r.size+int64(len(p)) > r.maxSize && r.maxSize > 0 {
 		if err := r.rotate(); err != nil {
 			return 0, err
@@ -253,7 +239,7 @@ func (r *fileRotator) openNew() error {
 	}
 	info, err := file.Stat()
 	if err != nil {
-		file.Close()
+		_ = file.Close()
 		return err
 	}
 	r.file = file
@@ -263,17 +249,15 @@ func (r *fileRotator) openNew() error {
 
 func (r *fileRotator) rotate() error {
 	if r.file != nil {
-		r.file.Close()
+		_ = r.file.Close()
 	}
 
-	// 重命名当前文件
 	timestamp := time.Now().Format("20060102-150405")
 	backupName := fmt.Sprintf("%s-%s%s", r.baseName, timestamp, r.ext)
 	if err := os.Rename(r.filename, backupName); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 
-	// 可选压缩
 	if r.compress {
 		go r.compressFile(backupName)
 	}
@@ -282,7 +266,7 @@ func (r *fileRotator) rotate() error {
 }
 
 func (r *fileRotator) compressFile(filename string) {
-	// 简单起见，暂不实现压缩
+	_ = filename
 }
 
 func (r *fileRotator) cleanup() {
@@ -317,9 +301,6 @@ func (r *fileRotator) doCleanup() {
 		}
 	}
 
-	// 按时间排序（旧文件在前）
-	// 简单实现：根据文件名排序
-
 	now := time.Now()
 	for i, path := range backups {
 		info, err := os.Stat(path)
@@ -327,43 +308,39 @@ func (r *fileRotator) doCleanup() {
 			continue
 		}
 
-		// 按时间删除
-		if r.maxAge > 0 {
-			if now.Sub(info.ModTime()) > time.Duration(r.maxAge)*24*time.Hour {
-				os.Remove(path)
-				continue
-			}
+		if r.maxAge > 0 && now.Sub(info.ModTime()) > time.Duration(r.maxAge)*24*time.Hour {
+			_ = os.Remove(path)
+			continue
 		}
 
-		// 按数量删除
 		if r.maxBackups > 0 && i < len(backups)-r.maxBackups {
-			os.Remove(path)
+			_ = os.Remove(path)
 		}
 	}
 }
 
-// splitExt 分割文件名和扩展名
+// splitExt 将文件路径拆分为主文件名和扩展名。
 func splitExt(path string) (base, ext string) {
 	ext = filepath.Ext(path)
 	base = path[:len(path)-len(ext)]
 	return
 }
 
-// Sync 刷新日志缓冲区
+// Sync 刷新缓冲中的日志。
 func Sync() {
 	if Logger != nil {
 		_ = Logger.Sync()
 	}
 }
 
-// SetDBLogWriter 设置数据库日志写入器
+// SetDBLogWriter 注册数据库日志写入器。
 func SetDBLogWriter(writer DBLogWriter) {
 	dbLogWriterMux.Lock()
 	defer dbLogWriterMux.Unlock()
 	dbLogWriter = writer
 }
 
-// shouldWriteToDB 判断是否需要将日志写入数据库
+// shouldWriteToDB 判断当前日志是否需要额外写入数据库。
 func shouldWriteToDB(level zapcore.Level) bool {
 	if !enableDBLog {
 		return false
@@ -373,7 +350,7 @@ func shouldWriteToDB(level zapcore.Level) bool {
 	return dbLogWriter != nil && level >= minDBLogLevel
 }
 
-// fieldsToMap 将 zap.Field 转换为 map[string]any
+// fieldsToMap 将 zap 字段转换为普通 map。
 func fieldsToMap(fields []zap.Field) map[string]any {
 	if len(fields) == 0 {
 		return make(map[string]any)
@@ -415,7 +392,6 @@ func fieldsToMap(fields []zap.Field) map[string]any {
 		return make(map[string]any)
 	}
 
-	// 移除默认字段
 	delete(result, "time")
 	delete(result, "level")
 	delete(result, "msg")
@@ -423,7 +399,7 @@ func fieldsToMap(fields []zap.Field) map[string]any {
 	return result
 }
 
-// writeDBLog 写入数据库日志
+// writeDBLog 将日志写入可选的数据库目标。
 func writeDBLog(level zapcore.Level, module, msg string, fields []zap.Field, traceID, userID string) {
 	if shouldWriteToDB(level) {
 		dbLogWriterMux.RLock()
@@ -433,97 +409,74 @@ func writeDBLog(level zapcore.Level, module, msg string, fields []zap.Field, tra
 	}
 }
 
-// --- 日志方法 ---
-
-// Debug 调试日志
 func Debug(msg string, fields ...zap.Field) {
 	Logger.Debug(msg, fields...)
 	writeDBLog(zapcore.DebugLevel, "", msg, fields, "", "")
 }
 
-// Info 信息日志
 func Info(msg string, fields ...zap.Field) {
 	Logger.Info(msg, fields...)
 	writeDBLog(zapcore.InfoLevel, "", msg, fields, "", "")
 }
 
-// Warn 警告日志
 func Warn(msg string, fields ...zap.Field) {
 	Logger.Warn(msg, fields...)
 	writeDBLog(zapcore.WarnLevel, "", msg, fields, "", "")
 }
 
-// Error 错误日志
 func Error(msg string, fields ...zap.Field) {
 	Logger.Error(msg, fields...)
 	writeDBLog(zapcore.ErrorLevel, "", msg, fields, "", "")
 }
 
-// Fatal 致命错误日志（会退出程序）
 func Fatal(msg string, fields ...zap.Field) {
 	writeDBLog(zapcore.FatalLevel, "", msg, fields, "", "")
 	Logger.Fatal(msg, fields...)
 }
 
-// --- 带模块的日志方法 ---
-
-// DebugWithModule 带模块的调试日志
 func DebugWithModule(module, msg string, fields ...zap.Field) {
 	Logger.Debug(msg, append([]zap.Field{zap.String("module", module)}, fields...)...)
 	writeDBLog(zapcore.DebugLevel, module, msg, fields, "", "")
 }
 
-// InfoWithModule 带模块的信息日志
 func InfoWithModule(module, msg string, fields ...zap.Field) {
 	Logger.Info(msg, append([]zap.Field{zap.String("module", module)}, fields...)...)
 	writeDBLog(zapcore.InfoLevel, module, msg, fields, "", "")
 }
 
-// WarnWithModule 带模块的警告日志
 func WarnWithModule(module, msg string, fields ...zap.Field) {
 	Logger.Warn(msg, append([]zap.Field{zap.String("module", module)}, fields...)...)
 	writeDBLog(zapcore.WarnLevel, module, msg, fields, "", "")
 }
 
-// ErrorWithModule 带模块的错误日志
 func ErrorWithModule(module, msg string, fields ...zap.Field) {
 	Logger.Error(msg, append([]zap.Field{zap.String("module", module)}, fields...)...)
 	writeDBLog(zapcore.ErrorLevel, module, msg, fields, "", "")
 }
 
-// --- SugaredLogger 方法（更灵活，性能略低）---
-
-// Debugf 格式化调试日志
 func Debugf(template string, args ...any) {
 	sugar.Debugf(template, args...)
 }
 
-// Infof 格式化信息日志
 func Infof(template string, args ...any) {
 	sugar.Infof(template, args...)
 }
 
-// Warnf 格式化警告日志
 func Warnf(template string, args ...any) {
 	sugar.Warnf(template, args...)
 }
 
-// Errorf 格式化错误日志
 func Errorf(template string, args ...any) {
 	sugar.Errorf(template, args...)
 }
 
-// Fatalf 格式化致命错误日志
 func Fatalf(template string, args ...any) {
 	sugar.Fatalf(template, args...)
 }
 
-// --- Gin 中间件 ---
-
-// RequestLogger 请求日志中间件
+// RequestLogger 记录请求开始与结束日志，并注入 X-Request-ID。
 func RequestLogger() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 生成或获取请求 ID
 		rid := c.GetHeader("X-Request-ID")
 		if rid == "" {
 			rid = uuid.New().String()
@@ -536,8 +489,7 @@ func RequestLogger() gin.HandlerFunc {
 			path = c.Request.URL.Path
 		}
 
-		// 记录请求开始
-		Info("http_request_start",
+		Info("收到HTTP请求",
 			zap.String("request_id", rid),
 			zap.String("method", c.Request.Method),
 			zap.String("path", path),
@@ -548,7 +500,6 @@ func RequestLogger() gin.HandlerFunc {
 
 		c.Next()
 
-		// 记录请求结束
 		latency := time.Since(start)
 		status := c.Writer.Status()
 		size := c.Writer.Size()
@@ -561,7 +512,7 @@ func RequestLogger() gin.HandlerFunc {
 			errMsg = c.Errors.String()
 		}
 
-		Info("http_request_end",
+		Info("HTTP请求完成",
 			zap.String("request_id", rid),
 			zap.Int("status", status),
 			zap.Int("response_size", size),
@@ -575,56 +526,51 @@ func RequestLogger() gin.HandlerFunc {
 	}
 }
 
-// WithTraceID 返回带 traceID 的日志上下文
+// WithTraceID 创建一个带 traceID 的日志上下文。
 func WithTraceID(traceID string) *LogContext {
 	return &LogContext{traceID: traceID}
 }
 
-// WithUserID 返回带 userID 的日志上下文
+// WithUserID 创建一个带 userID 的日志上下文。
 func WithUserID(userID string) *LogContext {
 	return &LogContext{userID: userID}
 }
 
-// WithTraceAndUserID 返回带 traceID 和 userID 的日志上下文
+// WithTraceAndUserID 创建一个同时带 traceID 和 userID 的日志上下文。
 func WithTraceAndUserID(traceID, userID string) *LogContext {
 	return &LogContext{traceID: traceID, userID: userID}
 }
 
-// LogContext 日志上下文，携带 traceID 和 userID
+// LogContext 用于在日志中携带 trace 和用户信息。
 type LogContext struct {
 	traceID string
 	userID  string
 }
 
-// Debug 调试日志
 func (lc *LogContext) Debug(msg string, fields ...zap.Field) {
 	allFields := lc.appendContextFields(fields)
 	Logger.Debug(msg, allFields...)
 	writeDBLog(zapcore.DebugLevel, "", msg, fields, lc.traceID, lc.userID)
 }
 
-// Info 信息日志
 func (lc *LogContext) Info(msg string, fields ...zap.Field) {
 	allFields := lc.appendContextFields(fields)
 	Logger.Info(msg, allFields...)
 	writeDBLog(zapcore.InfoLevel, "", msg, fields, lc.traceID, lc.userID)
 }
 
-// Warn 警告日志
 func (lc *LogContext) Warn(msg string, fields ...zap.Field) {
 	allFields := lc.appendContextFields(fields)
 	Logger.Warn(msg, allFields...)
 	writeDBLog(zapcore.WarnLevel, "", msg, fields, lc.traceID, lc.userID)
 }
 
-// Error 错误日志
 func (lc *LogContext) Error(msg string, fields ...zap.Field) {
 	allFields := lc.appendContextFields(fields)
 	Logger.Error(msg, allFields...)
 	writeDBLog(zapcore.ErrorLevel, "", msg, fields, lc.traceID, lc.userID)
 }
 
-// appendContextFields 添加上下文字段
 func (lc *LogContext) appendContextFields(fields []zap.Field) []zap.Field {
 	result := make([]zap.Field, 0, len(fields)+2)
 	if lc.traceID != "" {

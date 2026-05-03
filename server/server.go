@@ -1,13 +1,13 @@
-// Copyright 2025 ink-yht-code
+// 版权所有 2025 ink-yht-code
 //
-// Proprietary License
+// 专有许可
 //
-// IMPORTANT: This software is NOT open source.
-// You may NOT use, copy, modify, merge, publish, distribute, sublicense,
-// or sell copies of this file, in whole or in part, without prior written
-// permission from the copyright holder.
+// 重要说明：本软件并非开源软件。
+// 未经版权持有人事先书面许可，
+// 不得使用、复制、修改、合并、发布、分发、再许可，
+// 也不得全部或部分出售本文件的副本。
 //
-// This software is provided "AS IS", without warranty of any kind.
+// 本软件按“现状”提供，不附带任何形式的担保。
 
 package server
 
@@ -26,23 +26,23 @@ import (
 	"go.uber.org/zap"
 )
 
-// Server HTTP 服务器封装
+// Server 封装了带优雅关闭能力的 HTTP 服务。
 type Server struct {
 	*http.Server
-	shutdownTS time.Duration // 关闭超时时间
+	shutdownTS time.Duration
 }
 
-// Option 服务器配置选项
+// Option 用于定制服务实例。
 type Option func(*Server)
 
-// WithShutdownTimeout 设置关闭超时时间
+// WithShutdownTimeout 设置优雅关闭超时时间。
 func WithShutdownTimeout(d time.Duration) Option {
 	return func(s *Server) {
 		s.shutdownTS = d
 	}
 }
 
-// New 创建 HTTP 服务器
+// New 创建一个新的 HTTP 服务包装器。
 func New(addr string, engine *gin.Engine, opts ...Option) *Server {
 	s := &Server{
 		Server: &http.Server{
@@ -59,81 +59,70 @@ func New(addr string, engine *gin.Engine, opts ...Option) *Server {
 	return s
 }
 
-// Start 启动服务器（非阻塞）
+// Start 以异步方式启动 HTTP 服务。
 func (s *Server) Start() error {
 	go func() {
-		logger.Info("HTTP 服务器启动", zap.String("addr", s.Addr))
+		logger.Info("HTTP 服务已启动", zap.String("addr", s.Addr))
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("HTTP 服务器错误", zap.Error(err))
+			logger.Error("HTTP 服务启动失败", zap.Error(err))
 		}
 	}()
 	return nil
 }
 
-// Run 启动服务器并阻塞，支持优雅关闭
-// 监听 SIGINT (Ctrl+C) 和 SIGTERM (K8s 停止信号)
+// Run 启动服务并阻塞，直到收到退出信号。
 func (s *Server) Run() error {
-	// 启动服务器
 	go func() {
-		logger.Info("HTTP 服务器启动", zap.String("addr", s.Addr))
+		logger.Info("HTTP 服务已启动", zap.String("addr", s.Addr))
 		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Error("HTTP 服务器错误", zap.Error(err))
+			logger.Error("HTTP 服务启动失败", zap.Error(err))
 		}
 	}()
 
-	// 等待中断信号
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	logger.Info("正在关闭服务器...")
+	logger.Info("正在关闭 HTTP 服务")
 
-	// 优雅关闭
 	ctx, cancel := context.WithTimeout(context.Background(), s.shutdownTS)
 	defer cancel()
 
 	if err := s.Shutdown(ctx); err != nil {
-		logger.Error("服务器关闭错误", zap.Error(err))
-		return fmt.Errorf("服务器关闭错误: %w", err)
+		logger.Error("HTTP 服务关闭失败", zap.Error(err))
+		return fmt.Errorf("HTTP 服务关闭失败: %w", err)
 	}
 
-	logger.Info("服务器已关闭")
+	logger.Info("HTTP 服务已停止")
 	return nil
 }
 
-// Shutdown 优雅关闭
-// 1. 停止接受新连接
-// 2. 等待现有请求处理完成
-// 3. 超时后强制关闭
+// Shutdown 优雅关闭底层 HTTP 服务。
 func (s *Server) Shutdown(ctx context.Context) error {
 	return s.Server.Shutdown(ctx)
 }
 
-// --- 简便函数 ---
-
-// Run 快速启动服务器
+// Run 使用默认参数启动服务。
 func Run(addr string, engine *gin.Engine) error {
 	return New(addr, engine).Run()
 }
 
-// RunWithTimeout 快速启动服务器（自定义超时）
+// RunWithTimeout 使用自定义关闭超时启动服务。
 func RunWithTimeout(addr string, engine *gin.Engine, timeout time.Duration) error {
 	return New(addr, engine, WithShutdownTimeout(timeout)).Run()
 }
 
-// --- 关闭钩子 ---
-
-// ShutdownHook 关闭钩子函数
+// ShutdownHook 表示关闭阶段执行的钩子函数。
 type ShutdownHook func(ctx context.Context) error
 
-// GracefulShutdown 优雅关闭管理器
+// GracefulShutdown 管理优雅关闭钩子。
 type GracefulShutdown struct {
 	hooks    []ShutdownHook
 	timeout  time.Duration
 	onSignal func()
 }
 
-// NewGracefulShutdown 创建优雅关闭管理器
+// NewGracefulShutdown 创建优雅关闭管理器。
 func NewGracefulShutdown(timeout time.Duration) *GracefulShutdown {
 	return &GracefulShutdown{
 		hooks:   make([]ShutdownHook, 0),
@@ -141,20 +130,19 @@ func NewGracefulShutdown(timeout time.Duration) *GracefulShutdown {
 	}
 }
 
-// AddHook 添加关闭钩子
-// 钩子按添加顺序执行
+// AddHook 注册关闭钩子。
 func (g *GracefulShutdown) AddHook(hook ShutdownHook) *GracefulShutdown {
 	g.hooks = append(g.hooks, hook)
 	return g
 }
 
-// OnSignal 设置信号处理回调
+// OnSignal 注册收到退出信号后的回调函数。
 func (g *GracefulShutdown) OnSignal(fn func()) *GracefulShutdown {
 	g.onSignal = fn
 	return g
 }
 
-// Wait 等待信号并执行关闭
+// Wait 等待退出信号并依次执行关闭钩子。
 func (g *GracefulShutdown) Wait() error {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -164,7 +152,7 @@ func (g *GracefulShutdown) Wait() error {
 		g.onSignal()
 	}
 
-	logger.Info("开始执行关闭钩子...")
+	logger.Info("开始执行关闭钩子")
 
 	ctx, cancel := context.WithTimeout(context.Background(), g.timeout)
 	defer cancel()
@@ -180,9 +168,7 @@ func (g *GracefulShutdown) Wait() error {
 	return nil
 }
 
-// --- 预置钩子 ---
-
-// HookCloseDB 关闭数据库连接
+// HookCloseDB 返回一个用于关闭数据库连接的钩子。
 func HookCloseDB(closeFunc func() error) ShutdownHook {
 	return func(ctx context.Context) error {
 		logger.Info("关闭数据库连接")
@@ -190,7 +176,7 @@ func HookCloseDB(closeFunc func() error) ShutdownHook {
 	}
 }
 
-// HookCloseRedis 关闭 Redis 连接
+// HookCloseRedis 返回一个用于关闭 Redis 连接的钩子。
 func HookCloseRedis(closeFunc func() error) ShutdownHook {
 	return func(ctx context.Context) error {
 		logger.Info("关闭 Redis 连接")
@@ -198,7 +184,7 @@ func HookCloseRedis(closeFunc func() error) ShutdownHook {
 	}
 }
 
-// HookCloseMQ 关闭消息队列连接
+// HookCloseMQ 返回一个用于关闭消息队列连接的钩子。
 func HookCloseMQ(closeFunc func() error) ShutdownHook {
 	return func(ctx context.Context) error {
 		logger.Info("关闭消息队列连接")

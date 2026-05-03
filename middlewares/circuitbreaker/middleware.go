@@ -338,6 +338,21 @@ func (b *Builder) getBreaker(c *gin.Context) *CircuitBreaker {
 
 // --- 便捷函数 ---
 
+// Stats 返回所有熔断器的统计信息，key 为分组键（单模式下 key 为 "default"）。
+func (b *Builder) Stats() map[string]Stats {
+	result := make(map[string]Stats)
+	if b.singleMode {
+		result["default"] = b.breaker.Stats()
+		return result
+	}
+	b.breakers.Range(func(key, value any) bool {
+		cb := value.(*CircuitBreaker)
+		result[key.(string)] = cb.Stats()
+		return true
+	})
+	return result
+}
+
 // Middleware 创建默认熔断中间件
 func Middleware(config ...Config) gin.HandlerFunc {
 	return NewBuilder(config...).Build()

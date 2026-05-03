@@ -1,23 +1,23 @@
-# Context增强
+# 上下文增强
 
-gint 提供了增强的 Context，基于 Gin Context 扩展，支持 UserContext 统一用户身份管理。
+gint 提供了增强的上下文能力，基于 Gin Context 扩展，支持统一的用户身份信息管理。
 
 ## 概述
 
 `gctx.Context` 是对 `gin.Context` 的增强封装，提供：
-- UserContext 统一用户身份
-- TraceID 链路追踪
+- 用户上下文
+- 链路追踪 ID
 - 便捷方法
 
 ## 基本使用
 
-### 获取增强Context
+### 获取增强上下文
 
 ```go
 import "github.com/ink-yht-code/gint/gctx"
 
 func Handler(c *gin.Context) {
-    // 转换为增强Context
+    // 转换为增强上下文
     ctx := gctx.FromContext(c)
     
     // 或在包装器中直接使用
@@ -25,7 +25,7 @@ func Handler(c *gin.Context) {
 }
 ```
 
-### 在Handler包装器中使用
+### 在处理器包装器中使用
 
 ```go
 r.GET("/profile", gint.W(func(c *gin.Context, req Req) (gint.Result, error) {
@@ -39,7 +39,7 @@ r.GET("/profile", gint.W(func(c *gin.Context, req Req) (gint.Result, error) {
 }))
 ```
 
-## UserContext
+## 用户上下文
 
 ### 结构定义
 
@@ -53,7 +53,7 @@ type UserContext struct {
 }
 ```
 
-### 设置UserContext
+### 设置用户上下文
 
 ```go
 // 手动设置
@@ -67,10 +67,10 @@ ctx.SetUserContext(&gctx.UserContext{
 })
 ```
 
-### 获取UserContext
+### 获取用户上下文
 
 ```go
-// 获取完整UserContext
+// 获取完整用户上下文
 userContext := ctx.UserContext()
 if userContext != nil {
     userId := userContext.UserId
@@ -78,7 +78,7 @@ if userContext != nil {
     tenantId := userContext.TenantId
 }
 
-// 便捷方法：仅获取UserId
+// 便捷方法：仅获取用户 ID
 userId := ctx.UserId()
 ```
 
@@ -102,9 +102,9 @@ r.GET("/api/profile", gint.S(func(c *gin.Context, req Req, session *gint.Session
 }))
 ```
 
-## TraceID
+## 链路追踪标识
 
-### 设置TraceID
+### 设置链路追踪 ID
 
 ```go
 ctx := gctx.FromContext(c)
@@ -114,7 +114,7 @@ ctx.SetTraceId("trace-123")
 r.Use(trace.Middleware())
 ```
 
-### 获取TraceID
+### 获取链路追踪 ID
 
 ```go
 traceId := ctx.TraceId()
@@ -122,7 +122,7 @@ traceId := ctx.TraceId()
 
 ### 响应头自动设置
 
-trace 中间件会自动将 TraceID 写入响应头：
+trace 中间件会自动将链路追踪 ID 写入响应头：
 
 ```
 X-Trace-ID: trace-123
@@ -130,7 +130,7 @@ X-Trace-ID: trace-123
 
 ## 便捷方法
 
-### Get/Set
+### 读写键值
 
 ```go
 // 设置值
@@ -159,7 +159,7 @@ auth := ctx.GetHeader("Authorization")
 ua := ctx.GetHeader("User-Agent")
 ```
 
-## 与Gin Context兼容
+## 与 Gin 上下文兼容
 
 `gctx.Context` 完全兼容 `gin.Context`：
 
@@ -184,16 +184,16 @@ ctx.GetRawData()
 
 ### 自动传递
 
-trace 中间件 + ghttp 客户端自动传递 UserContext：
+trace 中间件 + ghttp 客户端可自动传递用户上下文：
 
 ```go
-// 服务A：设置UserContext
+// 服务 A：设置用户上下文
 r.Use(trace.Middleware())
 
 r.GET("/api/call", func(c *gin.Context) {
     ctx := c.(*gctx.Context)
     
-    // 调用服务B，UserContext自动传递
+    // 调用服务 B，用户上下文自动传递
     client := ghttp.NewClient()
     var result Response
     client.Get(ctx, "http://service-b/api/data", &result)
@@ -201,13 +201,13 @@ r.GET("/api/call", func(c *gin.Context) {
     c.JSON(200, result)
 })
 
-// 服务B：接收UserContext
+// 服务 B：接收用户上下文
 r.Use(trace.Middleware())
 
 r.GET("/api/data", func(c *gin.Context) {
     ctx := c.(*gctx.Context)
     
-    // UserContext 已自动从请求头提取
+    // 用户上下文已自动从请求头提取
     userContext := ctx.UserContext()
     
     c.JSON(200, userContext)
@@ -216,7 +216,7 @@ r.GET("/api/data", func(c *gin.Context) {
 
 ### 请求头格式
 
-UserContext 通过以下请求头传递：
+用户上下文通过以下请求头传递：
 
 | 请求头 | 字段 |
 |--------|------|
