@@ -20,17 +20,17 @@ import (
 	"github.com/ink-yht-code/gint/session"
 )
 
-// TokenExtractor 从请求中提取 Token 的函数
+// TokenExtractor 从请求中提取 Token。
 type TokenExtractor func(c *gin.Context) string
 
-// HeaderExtractor 从 Header 提取 Token
+// HeaderExtractor 从 Header 提取 Token。
 func HeaderExtractor(headerName string) TokenExtractor {
 	return func(c *gin.Context) string {
 		return c.GetHeader(headerName)
 	}
 }
 
-// BearerExtractor 从 Authorization: Bearer <token> 提取
+// BearerExtractor 从 Authorization: Bearer <token> 提取 Token。
 func BearerExtractor() TokenExtractor {
 	return func(c *gin.Context) string {
 		auth := c.GetHeader("Authorization")
@@ -41,7 +41,7 @@ func BearerExtractor() TokenExtractor {
 	}
 }
 
-// CookieExtractor 从 Cookie 提取
+// CookieExtractor 从 Cookie 提取 Token。
 func CookieExtractor(cookieName string) TokenExtractor {
 	return func(c *gin.Context) string {
 		token, _ := c.Cookie(cookieName)
@@ -49,13 +49,10 @@ func CookieExtractor(cookieName string) TokenExtractor {
 	}
 }
 
-// Config 认证中间件配置
+// Config 是认证中间件配置。
 type Config struct {
-	// JWTManager JWT 管理器
-	JWTManager jwt.Manager
-	// TokenExtractor Token 提取器，默认从 Authorization: Bearer 提取
-	TokenExtractor TokenExtractor
-	// SessionProvider Session 提供者（可选，不设置则使用全局默认）
+	JWTManager      jwt.Manager
+	TokenExtractor  TokenExtractor
 	SessionProvider session.Provider
 }
 
@@ -66,8 +63,92 @@ func respondMisconfigured(c *gin.Context) {
 	})
 }
 
-// Middleware 创建认证中间件
-// 流程：验证 JWT → 获取 Session → 构建 UserContext → 注入到 ctx
+func unauthorized(c *gin.Context, msg string) {
+	c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+		"code": 20001,
+		"msg":  msg,
+	})
+}
+
+func buildUserContextFromClaims(claims *jwt.Claims) *gctx.UserContext {
+	if claims == nil {
+		return &gctx.UserContext{}
+	}
+
+	uc := &gctx.UserContext{
+		UserId:   claims.UserId,
+		Username: claims.Username,
+		Role:     claims.Role,
+		TenantId: claims.TenantId,
+		Email:    claims.Email,
+		Extra:    map[string]string{},
+	}
+
+	for key, value := range claims.Data {
+		switch key {
+		case "tenant_id":
+			if uc.TenantId == "" {
+				uc.TenantId = value
+			}
+		case "role":
+			if uc.Role == "" {
+				uc.Role = value
+			}
+		case "username":
+			if uc.Username == "" {
+				uc.Username = value
+			}
+		case "email":
+			if uc.Email == "" {
+				uc.Email = value
+			}
+		default:
+			uc.Extra[key] = value
+		}
+	}
+
+	return uc
+}
+
+func ensureUserContext(ctx *gctx.Context, uc *gctx.UserContext, claims *jwt.Claims) *gctx.UserContext {
+	claimsUC := buildUserContextFromClaims(claims)
+	if uc == nil {
+		ctx.SetUserContext(claimsUC)
+		ctx.SetUserId(claimsUC.UserId)
+		return claimsUC
+	}
+
+	if uc.UserId == "" {
+		uc.UserId = claimsUC.UserId
+	}
+	if uc.Username == "" {
+		uc.Username = claimsUC.Username
+	}
+	if uc.Role == "" {
+		uc.Role = claimsUC.Role
+	}
+	if uc.TenantId == "" {
+		uc.TenantId = claimsUC.TenantId
+	}
+	if uc.Email == "" {
+		uc.Email = claimsUC.Email
+	}
+	if uc.Extra == nil {
+		uc.Extra = map[string]string{}
+	}
+	for key, value := range claimsUC.Extra {
+		if _, ok := uc.Extra[key]; !ok {
+			uc.Extra[key] = value
+		}
+	}
+
+	ctx.SetUserContext(uc)
+	ctx.SetUserId(uc.UserId)
+	return uc
+}
+
+// Middleware 创建认证中间件。
+// 流程：验证 JWT -> 获取 Session -> 构建 UserContext -> 注入到 ctx。
 func Middleware(cfg Config) gin.HandlerFunc {
 	extractor := cfg.TokenExtractor
 	if extractor == nil {
@@ -81,59 +162,43 @@ func Middleware(cfg Config) gin.HandlerFunc {
 		}
 		ctx := &gctx.Context{Context: c}
 
-		// 1. 提取 Token
 		token := extractor(c)
 		if token == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code": 20001,
-				"msg":  "未提供认证令牌",
-			})
+			unauthorized(c, "未提供认证令牌")
 			return
 		}
 
-		// 2. 验证 JWT
 		claims, err := cfg.JWTManager.VerifyToken(token)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code": 20001,
-				"msg":  "令牌无效或已过期",
-			})
+			unauthorized(c, "令牌无效或已过期")
 			return
 		}
 
-		// 3. 设置 Session Provider（如果配置了）
 		if cfg.SessionProvider != nil {
 			session.SetProvider(ctx, cfg.SessionProvider)
 		}
 
-		// 4. 获取 Session（从 JWT claims 中的 SSID）
 		sess, err := session.Get(ctx)
 		if err != nil {
-			// Session 不存在，但 JWT 有效，创建基本 UserContext
-			uc := &gctx.UserContext{
-				UserId: claims.UserId,
-			}
-			ctx.SetUserContext(uc)
-			ctx.SetUserId(claims.UserId)
+			ensureUserContext(ctx, nil, claims)
 			c.Next()
 			return
 		}
 
-		// 5. 从 Session 构建 UserContext
 		uc, ucErr := sess.UserContext(c.Request.Context())
-		if ucErr == nil && uc != nil {
-			ctx.SetUserContext(uc)
-		} else {
-			// 即使获取详情失败，也设置基本的 userId
-			ctx.SetUserId(claims.UserId)
+		if ucErr != nil {
+			ensureUserContext(ctx, nil, claims)
+			c.Next()
+			return
 		}
 
+		ensureUserContext(ctx, uc, claims)
 		c.Next()
 	}
 }
 
-// GatewayMiddleware 网关认证中间件
-// 验证 JWT 后，将 UserContext 信息注入到请求头，传递给下游服务
+// GatewayMiddleware 创建网关认证中间件。
+// 验证 JWT 后，将 UserContext 信息注入到请求头，传递给下游服务。
 func GatewayMiddleware(cfg Config) gin.HandlerFunc {
 	extractor := cfg.TokenExtractor
 	if extractor == nil {
@@ -147,46 +212,30 @@ func GatewayMiddleware(cfg Config) gin.HandlerFunc {
 		}
 		ctx := &gctx.Context{Context: c}
 
-		// 1. 提取 Token
 		token := extractor(c)
 		if token == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code": 20001,
-				"msg":  "未提供认证令牌",
-			})
+			unauthorized(c, "未提供认证令牌")
 			return
 		}
 
-		// 2. 验证 JWT
 		claims, err := cfg.JWTManager.VerifyToken(token)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"code": 20001,
-				"msg":  "令牌无效或已过期",
-			})
+			unauthorized(c, "令牌无效或已过期")
 			return
 		}
 
-		// 3. 设置 Session Provider（如果配置了）
 		if cfg.SessionProvider != nil {
 			session.SetProvider(ctx, cfg.SessionProvider)
 		}
 
-		// 4. 获取 Session 并构建 UserContext
 		var uc *gctx.UserContext
 		sess, err := session.Get(ctx)
 		if err == nil {
 			uc, _ = sess.UserContext(c.Request.Context())
 		}
 
-		if uc == nil {
-			uc = &gctx.UserContext{UserId: claims.UserId}
-		}
+		uc = ensureUserContext(ctx, uc, claims)
 
-		// 5. 注入到 ctx
-		ctx.SetUserContext(uc)
-
-		// 6. 注入 Header，供网关后续转发链路使用
 		c.Request.Header.Set("X-User-ID", uc.UserId)
 		c.Writer.Header().Set("X-User-ID", uc.UserId)
 		if uc.Role != "" {
@@ -201,13 +250,17 @@ func GatewayMiddleware(cfg Config) gin.HandlerFunc {
 			c.Request.Header.Set("X-Username", uc.Username)
 			c.Writer.Header().Set("X-Username", uc.Username)
 		}
+		if uc.Email != "" {
+			c.Request.Header.Set("X-User-Email", uc.Email)
+			c.Writer.Header().Set("X-User-Email", uc.Email)
+		}
 
 		c.Next()
 	}
 }
 
-// OptionalMiddleware 可选认证中间件
-// 不强制要求认证，有 Token 则验证，无 Token 则跳过
+// OptionalMiddleware 创建可选认证中间件。
+// 不强制要求认证，有 Token 则验证，无 Token 则跳过。
 func OptionalMiddleware(cfg Config) gin.HandlerFunc {
 	extractor := cfg.TokenExtractor
 	if extractor == nil {
@@ -240,13 +293,14 @@ func OptionalMiddleware(cfg Config) gin.HandlerFunc {
 		sess, err := session.Get(ctx)
 		if err == nil {
 			uc, ucErr := sess.UserContext(c.Request.Context())
-			if ucErr == nil && uc != nil {
-				ctx.SetUserContext(uc)
+			if ucErr == nil {
+				ensureUserContext(ctx, uc, claims)
+				c.Next()
+				return
 			}
-		} else {
-			ctx.SetUserId(claims.UserId)
 		}
 
+		ensureUserContext(ctx, nil, claims)
 		c.Next()
 	}
 }

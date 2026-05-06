@@ -17,31 +17,28 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Claims JWT 声明结构
+// Claims 是项目统一使用的 JWT 声明结构。
 type Claims struct {
-	UserId string            `json:"user_id"` // 用户 ID（使用 string 类型）
-	SSID   string            `json:"ssid"`    // Session ID
-	Data   map[string]string `json:"data"`    // 额外数据
+	UserId   string            `json:"user_id"`             // 用户 ID
+	SSID     string            `json:"ssid"`                // Session ID
+	TenantId string            `json:"tenant_id,omitempty"` // 租户 ID
+	Role     string            `json:"role,omitempty"`      // 角色
+	Username string            `json:"username,omitempty"`  // 用户名
+	Email    string            `json:"email,omitempty"`     // 邮箱
+	Data     map[string]string `json:"data,omitempty"`      // 额外扩展数据
 	jwt.RegisteredClaims
 }
 
-// Options JWT 配置选项
+// Options 是 JWT 配置项。
 type Options struct {
-	// 签名密钥
-	SignKey string
-	// Access Token 过期时间
-	AccessExpire time.Duration
-	// Refresh Token 过期时间
+	SignKey       string
+	AccessExpire  time.Duration
 	RefreshExpire time.Duration
-	// 签名方法
-	Method jwt.SigningMethod
-	// 发行者
-	Issuer string
+	Method        jwt.SigningMethod
+	Issuer        string
 }
 
-// NewOptions 创建默认的 JWT 配置
-// accessExpire: Access Token 过期时间（建议 15 分钟 - 2 小时）
-// refreshExpire: Refresh Token 过期时间（建议 7 天 - 30 天）
+// NewOptions 创建默认 JWT 配置。
 func NewOptions(signKey string, accessExpire, refreshExpire time.Duration) Options {
 	return Options{
 		SignKey:       signKey,
@@ -52,23 +49,16 @@ func NewOptions(signKey string, accessExpire, refreshExpire time.Duration) Optio
 	}
 }
 
-// TokenPair Token 对（Access Token + Refresh Token）
+// TokenPair 是访问令牌和刷新令牌的组合。
 type TokenPair struct {
-	AccessToken  string `json:"access_token"`  // 访问令牌（短期有效）
-	RefreshToken string `json:"refresh_token"` // 刷新令牌（长期有效）
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
 }
 
-// Manager JWT 管理器接口
+// Manager 定义 JWT 的生成与校验能力。
 type Manager interface {
-	// GenerateToken 生成单个 Token（兼容旧版本）
 	GenerateToken(claims Claims) (string, error)
-
-	// GenerateTokenPair 生成 Token 对（Access Token + Refresh Token）
 	GenerateTokenPair(claims Claims) (*TokenPair, error)
-
-	// VerifyToken 验证 Token
 	VerifyToken(token string) (*Claims, error)
-
-	// VerifyRefreshToken 验证 Refresh Token
 	VerifyRefreshToken(token string) (*Claims, error)
 }
